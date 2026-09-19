@@ -1,0 +1,6 @@
+{
+  "name": "AI Work Assistant",
+  "description": "基于极简主义毛玻璃视觉规范的个人桌面端AI工作助手，提供完整交互逻辑说明与多端响应式布局适配方案。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
