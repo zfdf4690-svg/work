@@ -33,7 +33,7 @@ export const RendererTaskUpdateSchema = z.object({
 
 export const RendererTaskDeleteSchema = z.object({
   id: z.string().min(1, '缺少任务ID'),
-  confirmed: z.boolean({ required_error: '必须确认删除操作' }),
+  confirmed: z.boolean({ message: '必须确认删除操作' }),
 });
 
 // ============================================================================
@@ -67,9 +67,7 @@ export const MainTaskCompleteSchema = z.object({
 
 export const MainTaskDeleteSchema = z.object({
   id: z.string().min(1),
-  confirmed: z.literal(true, {
-    errorMap: () => ({ message: '物理删除任务必须显式传入 confirmed=true' }),
-  }),
+  confirmed: z.literal(true, { message: '物理删除任务必须显式传入 confirmed=true' }),
 });
 
 export const MainTaskGetSchema = z.object({
