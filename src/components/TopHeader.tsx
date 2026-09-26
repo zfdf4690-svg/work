@@ -1,11 +1,11 @@
 import React from 'react';
-import { Search, Bell, Building2, Plus, Zap, BookOpen } from 'lucide-react';
+import { Search, Bell, Plus, Zap } from 'lucide-react';
 
 interface TopHeaderProps {
   currentTabName: string;
   onOpenCommandPalette: () => void;
   onOpenNewTaskModal: () => void;
-  onOpenSpecModal: () => void;
+  onOpenSpecModal?: () => void;
   unreadCount?: number;
 }
 
@@ -13,7 +13,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   currentTabName,
   onOpenCommandPalette,
   onOpenNewTaskModal,
-  onOpenSpecModal,
   unreadCount = 1,
 }) => {
   return (
@@ -57,15 +56,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
       {/* Trailing Header Actions */}
       <div className="flex items-center gap-2 md:gap-2.5">
-        <button
-          onClick={onOpenSpecModal}
-          className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/[0.08] text-[#c7c4d7] hover:text-white text-xs font-medium transition-colors"
-          title="查看产品交互逻辑与响应式适配方案"
-        >
-          <BookOpen className="w-3.5 h-3.5 text-[#c0c1ff]" />
-          <span>交互规范与响应式说明</span>
-        </button>
-
         <button 
           aria-label="通知中心" 
           className="relative p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/[0.08] text-[#c7c4d7] hover:text-white transition-colors"
@@ -75,14 +65,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           {unreadCount > 0 && (
             <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#F87171] ring-2 ring-[#11151F]"></span>
           )}
-        </button>
-
-        <button 
-          aria-label="企业组织协同" 
-          className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/[0.08] text-[#c7c4d7] hover:text-white transition-colors hidden sm:inline-flex"
-          title="企业组织协同"
-        >
-          <Building2 className="w-4 h-4" />
         </button>
 
         <button

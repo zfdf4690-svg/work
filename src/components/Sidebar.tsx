@@ -4,7 +4,6 @@ import {
   CheckCircle2, 
   BookOpen, 
   FileText, 
-  Wrench, 
   Settings, 
   Plus, 
   SlidersHorizontal,
@@ -40,7 +39,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'ai-assistant' as NavTab, label: 'AI 助手', icon: Bot, badge: '核心' },
     { id: 'knowledge' as NavTab, label: '知识库', icon: BookOpen },
     { id: 'docs' as NavTab, label: '文稿与文件', icon: FileText },
-    { id: 'skills' as NavTab, label: '工具 / Skills', icon: Wrench, aiBadge: true },
     { id: 'settings' as NavTab, label: '设置', icon: Settings },
   ];
 
@@ -134,11 +132,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {item.badge && (
                       <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-[#c0c1ff]/20 text-[#c0c1ff] border border-[#c0c1ff]/30">
                         {item.badge}
-                      </span>
-                    )}
-                    {item.aiBadge && (
-                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-[#8B5CF6]/20 text-[#c4abff] border border-[#8B5CF6]/30">
-                        AI
                       </span>
                     )}
                   </div>

@@ -550,7 +550,7 @@ export const KnowledgeObsidianView: React.FC<KnowledgeObsidianViewProps> = ({
   };
 
   return (
-    <div className="flex h-[calc(100vh-56px)] w-full overflow-hidden bg-[#0A0D14] text-[#E2E4ED] font-sans">
+    <div className="flex h-full min-h-0 flex-1 w-full overflow-hidden bg-[#0A0D14] text-[#E2E4ED] font-sans">
       {/* 1. Left Sidebar: Obsidian Project / File Explorer (左侧项目栏) */}
       <aside className="w-64 sm:w-72 h-full flex flex-col bg-[#10131B] border-r border-white/[0.08] shrink-0 select-none">
         {/* Obsidian-Style Top Action Bar */}

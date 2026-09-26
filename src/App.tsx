@@ -309,16 +309,18 @@ export default function App() {
 
           {/* Main Stage */}
           <main className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden relative z-10">
-            {/* Top Toolbar Header */}
-            <TopHeader
-              currentTabName={tabTitleMap[activeTab]}
-              onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
-              onOpenNewTaskModal={() => setIsNewTaskModalOpen(true)}
-              onOpenSpecModal={() => setIsSpecModalOpen(true)}
-            />
+            {/* Top Toolbar Header (仅在工作台展示) */}
+            {activeTab === 'dashboard' && (
+              <TopHeader
+                currentTabName={tabTitleMap[activeTab]}
+                onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+                onOpenNewTaskModal={() => setIsNewTaskModalOpen(true)}
+                onOpenSpecModal={() => setIsSpecModalOpen(true)}
+              />
+            )}
 
             {/* Dynamic View Content Switcher */}
-            <div className="flex-1">
+            <div className="flex-1 min-h-0 flex flex-col">
               {activeTab === 'dashboard' && (
                 <DashboardView
                   tasks={tasks}
@@ -344,6 +346,7 @@ export default function App() {
                   onCancelAction={handleCancelAction}
                   onRemoveContext={handleRemoveContext}
                   onAddContext={handleAddContext}
+                  onNavigateToSkills={() => setActiveTab('skills')}
                 />
               )}
 
