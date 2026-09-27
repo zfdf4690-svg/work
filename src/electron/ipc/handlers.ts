@@ -1,10 +1,10 @@
 /**
  * IPC Handler Registry
  * 在 Electron Main 进程中注册受控的 IPC 处理器
- * 严格执行 Main Process Zod 边界校验，对未实现服务返回标准错误
+ * 严格执行 Main Process Zod 边界校验，并将请求交付 App Core (TaskService) 处理
  */
 
-import { ipcMain } from 'electron';
+import { ipcMain, BrowserWindow } from 'electron';
 import { IPC_CHANNELS } from './channels';
 import {
   createIpcError,
@@ -23,9 +23,78 @@ import {
   MainAgentInterruptSchema,
 } from './zodSchemas';
 import { Task, TaskPriority, TaskSource, TaskStatus } from '../../domain';
+import {
+  ITaskService,
+  TaskService,
+  ITaskRepository,
+  InMemoryTaskRepository,
+  IEventBus,
+  DomainEventBus,
+} from '../../core';
 
-export function registerIpcHandlers(): void {
-  // task:list - 冒烟测试核心通道：返回安全校验通过的临时任务数据
+function createDefaultSeedTasks(): Task[] {
+  const now = new Date().toISOString();
+  return [
+    {
+      id: 'smoke-electron-task-1',
+      title: 'Electron Runtime & Typed IPC Smoke Verification',
+      description: 'Main Process received IPC request through Preload contextBridge',
+      status: TaskStatus.IN_PROGRESS,
+      priority: TaskPriority.HIGH,
+      dueAt: new Date(Date.now() + 3600000).toISOString(),
+      source: TaskSource.SYSTEM,
+      category: 'Smoke Test',
+      tags: ['electron', 'ipc', 'smoke'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'task-core-seed-2',
+      title: '建立 App Core 任务服务与领域状态机',
+      description: '实现 TaskService + InMemory/SQLite 仓储标准接入层',
+      status: TaskStatus.PENDING,
+      priority: TaskPriority.MEDIUM,
+      source: TaskSource.MANUAL,
+      category: '架构',
+      tags: ['core', 'service'],
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+}
+
+// 默认单例仓储与服务实例
+let defaultRepository: ITaskRepository | null = null;
+let defaultService: ITaskService | null = null;
+
+export function registerIpcHandlers(
+  customTaskService?: ITaskService,
+  customEventBus?: IEventBus
+): void {
+  const eventBus = customEventBus || DomainEventBus.getInstance();
+
+  if (!defaultRepository) {
+    defaultRepository = new InMemoryTaskRepository(createDefaultSeedTasks());
+  }
+
+  const taskService: ITaskService =
+    customTaskService || defaultService || (defaultService = new TaskService(defaultRepository, eventBus));
+
+  // 监听领域事件并跨进程广播至所有活跃 BrowserWindow (Event Bus -> IPC Broadcast)
+  eventBus.subscribe('*', (event) => {
+    try {
+      const windows = BrowserWindow.getAllWindows();
+      for (const win of windows) {
+        if (!win.isDestroyed()) {
+          win.webContents.send(IPC_CHANNELS.EVENT_SUBSCRIBE, event);
+        }
+      }
+    } catch {
+      // 容错处理：在非 Electron 窗口活跃状态下忽略广播异常
+    }
+  });
+
+  // task:list - 查询任务列表
   ipcMain.handle(IPC_CHANNELS.TASK_LIST, async (_event, req): Promise<IpcResult<Task[]>> => {
     const parseResult = MainTaskListSchema.safeParse(req);
     if (!parseResult.success) {
@@ -35,70 +104,52 @@ export function registerIpcHandlers(): void {
         parseResult.error.flatten()
       );
     }
-
-    const now = new Date().toISOString();
-    const smokeTasks: Task[] = [
-      {
-        id: 'smoke-electron-task-1',
-        title: 'Electron Runtime & Typed IPC Smoke Verification',
-        description: 'Main Process received IPC request through Preload contextBridge',
-        status: TaskStatus.IN_PROGRESS,
-        priority: TaskPriority.HIGH,
-        dueAt: new Date(Date.now() + 3600000).toISOString(),
-        source: TaskSource.SYSTEM,
-        category: 'Smoke Test',
-        tags: ['electron', 'ipc', 'smoke'],
-        createdAt: now,
-        updatedAt: now,
-      },
-    ];
-
-    return createIpcSuccess(smokeTasks);
+    return taskService.listTasks(parseResult.data);
   });
 
-  // task:get
-  ipcMain.handle(IPC_CHANNELS.TASK_GET, async (_event, req) => {
+  // task:get - 获取指定任务
+  ipcMain.handle(IPC_CHANNELS.TASK_GET, async (_event, req): Promise<IpcResult<Task>> => {
     const parseResult = MainTaskGetSchema.safeParse(req);
     if (!parseResult.success) {
       return createIpcError(IpcErrorCode.VALIDATION_ERROR, '无效的任务 ID', parseResult.error.flatten());
     }
-    return createIpcError(IpcErrorCode.NOT_FOUND, 'TaskService 尚未挂载 (PHASE 3)');
+    return taskService.getTask(parseResult.data.id);
   });
 
-  // task:create
-  ipcMain.handle(IPC_CHANNELS.TASK_CREATE, async (_event, req) => {
+  // task:create - 创建任务
+  ipcMain.handle(IPC_CHANNELS.TASK_CREATE, async (_event, req): Promise<IpcResult<Task>> => {
     const parseResult = MainTaskCreateSchema.safeParse(req);
     if (!parseResult.success) {
       return createIpcError(IpcErrorCode.VALIDATION_ERROR, 'Main 端创建任务校验失败', parseResult.error.flatten());
     }
-    return createIpcError(IpcErrorCode.INTERNAL_ERROR, 'TaskService 尚未挂载 (PHASE 3 接入 SQLite)');
+    return taskService.createTask(parseResult.data);
   });
 
-  // task:update
-  ipcMain.handle(IPC_CHANNELS.TASK_UPDATE, async (_event, req) => {
+  // task:update - 更新任务
+  ipcMain.handle(IPC_CHANNELS.TASK_UPDATE, async (_event, req): Promise<IpcResult<Task>> => {
     const parseResult = MainTaskUpdateSchema.safeParse(req);
     if (!parseResult.success) {
       return createIpcError(IpcErrorCode.VALIDATION_ERROR, 'Main 端更新任务校验失败', parseResult.error.flatten());
     }
-    return createIpcError(IpcErrorCode.INTERNAL_ERROR, 'TaskService 尚未挂载 (PHASE 3 接入 SQLite)');
+    return taskService.updateTask(parseResult.data);
   });
 
-  // task:complete
-  ipcMain.handle(IPC_CHANNELS.TASK_COMPLETE, async (_event, req) => {
+  // task:complete - 完成任务
+  ipcMain.handle(IPC_CHANNELS.TASK_COMPLETE, async (_event, req): Promise<IpcResult<Task>> => {
     const parseResult = MainTaskCompleteSchema.safeParse(req);
     if (!parseResult.success) {
       return createIpcError(IpcErrorCode.VALIDATION_ERROR, 'Main 端完成任务校验失败', parseResult.error.flatten());
     }
-    return createIpcError(IpcErrorCode.INTERNAL_ERROR, 'TaskService 尚未挂载 (PHASE 3 接入 SQLite)');
+    return taskService.completeTask(parseResult.data.id);
   });
 
-  // task:delete
+  // task:delete - 删除任务
   ipcMain.handle(IPC_CHANNELS.TASK_DELETE, async (_event, req) => {
     const parseResult = MainTaskDeleteSchema.safeParse(req);
     if (!parseResult.success) {
       return createIpcError(IpcErrorCode.CONFIRMATION_REQUIRED, '物理删除任务必须显式传入 confirmed=true');
     }
-    return createIpcError(IpcErrorCode.INTERNAL_ERROR, 'TaskService 尚未挂载 (PHASE 3 接入 SQLite)');
+    return taskService.deleteTask(parseResult.data.id, parseResult.data.confirmed);
   });
 
   // agent:resume-confirmation
@@ -119,3 +170,4 @@ export function registerIpcHandlers(): void {
     return createIpcError(IpcErrorCode.INTERNAL_ERROR, 'AgentRuntime 尚未挂载 (PHASE 8)');
   });
 }
+
