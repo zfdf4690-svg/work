@@ -8,6 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getSecureWebPreferences, applyWindowSecurityPolicies } from './security';
 import { registerIpcHandlers } from '../ipc/handlers';
+import { initializeDatabase, closeDatabase } from './database';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,7 +35,8 @@ export function createMainWindow(): BrowserWindow {
   if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
     win.loadURL(devServerUrl);
   } else {
-    win.loadFile(path.resolve(__dirname, '../../../dist/index.html'));
+    // 打包布局：resources/app/dist-electron/main/index.js → 上两级即 resources/app/，再进 dist/
+    win.loadFile(path.resolve(__dirname, '../../dist/index.html'));
   }
 
   win.on('closed', () => {
@@ -45,24 +47,43 @@ export function createMainWindow(): BrowserWindow {
 }
 
 // 应用程序启动生命周期
+// 顺序铁律：app ready → Database init → (PHASE 3-B Migration) → IPC Handlers → create window
 export function startApp(): void {
-  // 注册所有受控 IPC Handlers
-  registerIpcHandlers();
+  app
+    .whenReady()
+    .then(async () => {
+      // 1. 初始化 SQLite 运行时（PHASE 3-A）：打开 <userData>/data.db 并应用运行时配置
+      await initializeDatabase();
 
-  app.whenReady().then(() => {
-    mainWindow = createMainWindow();
+      // 2. PHASE 3-B：Migration Runner 接入点（当前阶段不实现，仅保留位置）
 
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        mainWindow = createMainWindow();
-      }
+      // 3. 注册所有受控 IPC Handlers（当前仍由 InMemoryTaskRepository 支撑，PHASE 3-D 才切换为 SQLite）
+      registerIpcHandlers();
+
+      // 4. 创建主窗口
+      mainWindow = createMainWindow();
+
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+          mainWindow = createMainWindow();
+        }
+      });
+    })
+    .catch((error) => {
+      // 数据库等基础设施初始化失败时快速失败，不进入无持久化的降级运行
+      console.error('[Startup] 应用初始化失败：', error);
+      app.quit();
     });
-  });
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
       app.quit();
     }
+  });
+
+  // 退出前确定性关闭数据库连接（better-sqlite3 close 为同步执行，will-quit 阶段安全）
+  app.on('will-quit', () => {
+    void closeDatabase();
   });
 }
 

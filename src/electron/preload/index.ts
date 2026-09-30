@@ -51,10 +51,15 @@ export const electronAPI: ElectronAPI = {
 };
 
 // 安全上下文注入
+console.log('[Preload] script executing, contextBridge =', typeof contextBridge);
 try {
   if (contextBridge && typeof contextBridge.exposeInMainWorld === 'function') {
     contextBridge.exposeInMainWorld('electronAPI', electronAPI);
+    console.log('[Preload] electronAPI exposed to main world');
+  } else {
+    console.error('[Preload] contextBridge 不可用，electronAPI 未注入');
   }
-} catch {
-  // 非标准 electron 环境容错
+} catch (error) {
+  // 注入失败必须可观测，不得静默吞掉
+  console.error('[Preload] exposeInMainWorld 失败:', error);
 }
