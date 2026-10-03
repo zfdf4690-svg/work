@@ -537,7 +537,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <footer className="rounded-2xl bg-white/[0.02] border border-white/[0.08] p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-[#908fa0] text-xs">
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
           <span className="px-2 py-0.5 rounded bg-white/10 text-white font-mono text-[11px]">
-            Linear + macOS 交互范式
+            Linear 快捷交互范式
           </span>
           <span className="hidden sm:inline">支持快捷调出工作流与模型编排：</span>
           <span className="text-[#e1e2eb] font-mono text-[11px] bg-white/5 px-2 py-0.5 rounded border border-white/[0.08]">

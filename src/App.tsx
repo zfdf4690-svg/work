@@ -31,7 +31,6 @@ import {
   todayMeeting 
 } from './mockData';
 
-import { MacWindowHeader } from './components/MacWindowHeader';
 import { Sidebar } from './components/Sidebar';
 import { TopHeader } from './components/TopHeader';
 import { DashboardView } from './components/DashboardView';
@@ -268,23 +267,12 @@ export default function App() {
       {/* Micro-sandblasted noise texture across canvas */}
       <div className="absolute inset-0 frosted-sandblast-noise pointer-events-none z-[1] opacity-60" />
 
-      {/* Main OS Window Frame Container (Smoked Acrylic Outer Shell) */}
+      {/* Main Window Frame Container (Smoked Acrylic Outer Shell) */}
       <div className={`relative flex flex-col bg-[#07090E]/65 backdrop-blur-3xl border border-white/[0.14] shadow-[0_30px_70px_-15px_rgba(0,0,0,0.85)] overflow-hidden transition-all duration-500 ease-out z-10 ${
         isWindowMinimized 
           ? 'opacity-0 scale-90 translate-y-16 pointer-events-none' 
           : 'opacity-100 scale-100 translate-y-0'
       } ${getViewportContainerClasses()}`}>
-        {/* macOS Desktop Top Window Bar */}
-        <MacWindowHeader
-          viewportMode={viewportMode}
-          onViewportChange={setViewportMode}
-          feishuSynced={feishuSynced}
-          onToggleFeishu={() => setFeishuSynced(!feishuSynced)}
-          onMinimize={() => setIsWindowMinimized(true)}
-          onClose={() => setIsWindowMinimized(true)}
-          isMinimized={isWindowMinimized}
-        />
-
         {/* Main Workspace: Left Sidebar + Main Canvas */}
         <div className="flex-1 flex overflow-hidden relative">
           {/* Internal Ambient Light Cones for Canvas Acrylic Panels */}
