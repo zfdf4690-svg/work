@@ -1124,18 +1124,18 @@ export const KnowledgeObsidianView: React.FC<KnowledgeObsidianViewProps> = ({
         </footer>
       </main>
 
-      {/* Custom Danger Delete Confirmation Modal */}
+      {/* Custom Delete Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={deleteModalState.isOpen}
         onClose={() => setDeleteModalState(prev => ({ ...prev, isOpen: false }))}
         onConfirm={handleConfirmDelete}
-        title={deleteModalState.type === 'folder' ? '确认清理文件夹' : '确认删除笔记文件'}
+        title={deleteModalState.type === 'folder' ? '删除文件夹' : '删除文件'}
         itemName={deleteModalState.name}
         itemType={deleteModalState.type}
         warningText={
           deleteModalState.type === 'folder'
-            ? '此操作将彻底删除该分类目录及其包含的所有笔记文件，无法撤销。'
-            : '此操作将从知识库目录树与当前工作区中彻底清理该笔记，无法撤销。'
+            ? '删除的文件夹将进入回收站，30天后自动彻底删除。'
+            : '删除的文档将进入回收站，30天后自动彻底删除。'
         }
       />
 
