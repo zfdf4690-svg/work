@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Bot, 
   Send, 
@@ -126,6 +127,11 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
   }, [messages, activeSession]);
 
   const [openMenuSession, setOpenMenuSession] = useState<string | null>(null);
+  const [menuAnchorPos, setMenuAnchorPos] = useState<{
+    top: number;
+    left: number;
+    placement: 'top' | 'bottom';
+  } | null>(null);
   const [renamingSession, setRenamingSession] = useState<string | null>(null);
   const [renameInput, setRenameInput] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -133,6 +139,44 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  const closeSessionMenu = () => {
+    setOpenMenuSession(null);
+    setMenuAnchorPos(null);
+  };
+
+  const handleOpenSessionMenu = (e: React.MouseEvent<HTMLButtonElement>, sessionName: string) => {
+    e.stopPropagation();
+    if (openMenuSession === sessionName) {
+      closeSessionMenu();
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const menuWidth = 144; // w-36 = 144px
+    const menuHeight = 165; // ~165px for 4 action buttons + border + padding
+    const margin = 8;
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+
+    // Rule: if space below >= menuHeight + margin, open downwards; otherwise open upwards
+    const spaceBelow = viewportHeight - rect.bottom;
+    const showDownward = spaceBelow >= menuHeight + margin;
+
+    let top = showDownward ? rect.bottom + 4 : rect.top - menuHeight - 4;
+    // Boundary clamp: keep menuTop >= 8px and menuBottom <= viewportHeight - 8px
+    top = Math.max(margin, Math.min(top, viewportHeight - menuHeight - margin));
+
+    // Align with button right edge, clamped within viewport
+    let left = rect.right - menuWidth;
+    left = Math.max(margin, Math.min(left, viewportWidth - menuWidth - margin));
+
+    setMenuAnchorPos({
+      top,
+      left,
+      placement: showDownward ? 'bottom' : 'top',
+    });
+    setOpenMenuSession(sessionName);
   };
 
   const handleCreateNewSession = () => {
@@ -149,12 +193,28 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
   };
 
   useEffect(() => {
+    if (!openMenuSession) return;
     const handleClickOutside = () => {
-      setOpenMenuSession(null);
+      closeSessionMenu();
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeSessionMenu();
+      }
+    };
+    const handleWindowResize = () => {
+      closeSessionMenu();
+    };
+
     window.addEventListener('click', handleClickOutside);
-    return () => window.removeEventListener('click', handleClickOutside);
-  }, []);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleWindowResize);
+    return () => {
+      window.removeEventListener('click', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleWindowResize);
+    };
+  }, [openMenuSession]);
 
   const handleCreateProject = (newProj: { name: string; localPath: string }) => {
     const p = { id: `proj-${Date.now()}`, ...newProj };
@@ -408,8 +468,9 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
   return (
     <div className="flex-1 flex overflow-hidden h-full min-h-0 font-sans relative">
       {/* 1. Left Conversation Rail */}
-      <div className="w-56 border-r border-white/[0.08] bg-[#11151F]/60 backdrop-blur-md p-3 flex flex-col justify-between shrink-0 hidden md:flex">
-        <div className="space-y-2.5">
+      <div className="w-56 border-r border-white/[0.08] bg-[#11151F]/60 backdrop-blur-md p-3 flex flex-col min-h-0 h-full shrink-0 hidden md:flex">
+        {/* Top Actions: 新建对话 & 工具/Skills */}
+        <div className="space-y-2.5 shrink-0">
           {/* Top action 1: 新建对话 Button */}
           <button
             type="button"
@@ -439,8 +500,13 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
               4个可用
             </span>
           </button>
+        </div>
 
-          <div className="space-y-3 pt-1 max-h-[calc(100vh-14rem)] overflow-y-auto custom-scrollbar pr-0.5">
+        {/* Session Scroll Area: 置顶 + 项目 + 任务 */}
+        <div 
+          onScroll={closeSessionMenu}
+          className="flex-1 min-h-0 space-y-3 pt-3 overflow-y-auto custom-scrollbar pr-0.5"
+        >
             {/* 1. 置顶 (Pinned) */}
             <div>
               <div className="text-[11px] font-mono text-[#908fa0] uppercase tracking-wider px-2 mb-1.5 flex items-center justify-between">
@@ -578,11 +644,10 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
                       {/* 2. 会话管理 button */}
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenMenuSession(openMenuSession === s ? null : s);
-                        }}
-                        className="p-1 rounded text-[#908fa0] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                        onClick={(e) => handleOpenSessionMenu(e, s)}
+                        className={`p-1 rounded text-[#908fa0] hover:text-white hover:bg-white/10 transition-colors cursor-pointer ${
+                          openMenuSession === s ? 'text-white bg-white/10' : ''
+                        }`}
                         title="会话管理"
                         aria-label="会话管理"
                       >
@@ -591,71 +656,18 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
                         </svg>
                       </button>
                     </div>
-
-                    {/* Popover Menu for this session */}
-                    {openMenuSession === s && (
-                      <div 
-                        className="absolute right-1 top-8 z-40 w-36 py-1 rounded-xl bg-[#181d2a] border border-white/15 shadow-2xl backdrop-blur-xl text-xs space-y-0.5 animate-in fade-in zoom-in-95 duration-150"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handlePinSession(s);
-                            setOpenMenuSession(null);
-                          }}
-                          className="w-full px-2.5 py-1.5 text-left text-[#c7c4d7] hover:text-white hover:bg-white/10 flex items-center gap-2 transition-colors cursor-pointer"
-                        >
-                          <Pin className="w-3.5 h-3.5 text-[#8083ff]" />
-                          <span>置顶会话</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRenamingSession(s);
-                            setRenameInput(s);
-                            setOpenMenuSession(null);
-                          }}
-                          className="w-full px-2.5 py-1.5 text-left text-[#c7c4d7] hover:text-white hover:bg-white/10 flex items-center gap-2 transition-colors cursor-pointer"
-                        >
-                          <Edit3 className="w-3.5 h-3.5 text-[#38BDF8]" />
-                          <span>重命名</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleArchiveSession(s);
-                            setOpenMenuSession(null);
-                          }}
-                          className="w-full px-2.5 py-1.5 text-left text-[#c7c4d7] hover:text-white hover:bg-white/10 flex items-center gap-2 transition-colors cursor-pointer"
-                        >
-                          <Archive className="w-3.5 h-3.5 text-amber-400" />
-                          <span>归档会话</span>
-                        </button>
-                        <div className="border-t border-white/[0.08] my-1" />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleDeleteSession(s);
-                            setOpenMenuSession(null);
-                          }}
-                          className="w-full px-2.5 py-1.5 text-left text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center gap-2 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                          <span>删除会话</span>
-                        </button>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
             </div>
-          </div>
         </div>
 
-        <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-[11px] text-[#908fa0] font-mono">
-          <span>模式：</span>
-          <span className="text-[#34D399]">被动等待指令</span>
+        {/* Footer Status */}
+        <div className="shrink-0 pt-2">
+          <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-[11px] text-[#908fa0] font-mono">
+            <span>模式：</span>
+            <span className="text-[#34D399]">被动等待指令</span>
+          </div>
         </div>
       </div>
 
@@ -1065,6 +1077,67 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
         onDeleteSession={handleDeleteSession}
         onSelectSession={(s) => setActiveSession(s)}
       />
+
+      {/* Session Management Popover via Portal (escapes overflow clipping and positions dynamically) */}
+      {openMenuSession && menuAnchorPos && createPortal(
+        <div 
+          style={{
+            position: 'fixed',
+            top: `${menuAnchorPos.top}px`,
+            left: `${menuAnchorPos.left}px`,
+          }}
+          className="z-50 w-36 py-1 rounded-xl bg-[#161a26]/95 border border-white/20 shadow-[0_12px_36px_rgba(0,0,0,0.65)] backdrop-blur-2xl text-xs space-y-0.5 animate-in fade-in zoom-in-95 duration-150 select-none font-sans"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              handlePinSession(openMenuSession);
+              closeSessionMenu();
+            }}
+            className="w-full px-2.5 py-1.5 text-left text-[#c7c4d7] hover:text-white hover:bg-white/10 flex items-center gap-2 transition-colors cursor-pointer"
+          >
+            <Pin className="w-3.5 h-3.5 text-[#8083ff]" />
+            <span>置顶会话</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setRenamingSession(openMenuSession);
+              setRenameInput(openMenuSession);
+              closeSessionMenu();
+            }}
+            className="w-full px-2.5 py-1.5 text-left text-[#c7c4d7] hover:text-white hover:bg-white/10 flex items-center gap-2 transition-colors cursor-pointer"
+          >
+            <Edit3 className="w-3.5 h-3.5 text-[#38BDF8]" />
+            <span>重命名</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              handleArchiveSession(openMenuSession);
+              closeSessionMenu();
+            }}
+            className="w-full px-2.5 py-1.5 text-left text-[#c7c4d7] hover:text-white hover:bg-white/10 flex items-center gap-2 transition-colors cursor-pointer"
+          >
+            <Archive className="w-3.5 h-3.5 text-amber-400" />
+            <span>归档会话</span>
+          </button>
+          <div className="border-t border-white/[0.08] my-1" />
+          <button
+            type="button"
+            onClick={() => {
+              handleDeleteSession(openMenuSession);
+              closeSessionMenu();
+            }}
+            className="w-full px-2.5 py-1.5 text-left text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center gap-2 transition-colors cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-red-400" />
+            <span>删除会话</span>
+          </button>
+        </div>,
+        document.body
+      )}
 
       {/* Floating Toast notification */}
       {toastMessage && (
