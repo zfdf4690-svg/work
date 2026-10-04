@@ -10,8 +10,13 @@ project trust。请保持精简——只放"违反了会破坏架构"的硬约�
   代码（该部分由 Google AI Studio 负责）。
 - **Pi 是后端实施 Agent，不是架构决策者。** 任何架构 / 契约层面的取舍，
   发现即报告，不得自行拍板。
-- 当前所处阶段：**PHASE 3-A0（Architecture Reconciliation，只读审计）**。
-  在该阶段的报告获得人工确认前，不进入 PHASE 3-A 正式编码。
+- 当前所处阶段：**PHASE 3-A ✅ ACCEPTED & COMMITTED**（commit `4f3fb8e`，
+  SQLite Runtime Foundation：DatabaseManager + `userData/data.db` + Main 生命周期
+  init/close + preload/electronAPI + dev/packaged 运行时验证全绿）。
+  PHASE 3-A0：ACCEPTED。**PHASE 3-B（Migration）：NOT STARTED / NOT AUTHORIZED**
+  ——未获人工明确批准前，禁止创建 `migrations/`、`001_init.sql`、Migration
+  Runner 或任何业务表。3-C Repository / 3-D DI 切换 / 3-E IPC 复核 /
+  3-F 重启持久化验收 / 3-G 事件一致性均未开始。详细进度见 `TASK_PROGRESS.md`。
 
 ## 技术栈（已冻结，不要更换）
 
@@ -40,7 +45,10 @@ Zod（IPC 边界 / Tool 输入输出校验）。
    - `Agent Execution State`：IDLE / RUNNING / WAITING_CONFIRMATION /
      INTERRUPTED / COMPLETED / FAILED / CANCELLED。
 6. **delete_task 使用物理 DELETE**，禁止用 `deleted_at` 字段或新增
-   `DELETED` 状态模拟删除。
+   `DELETED` 状态模拟删除。**任意 `Task.status`（PENDING / IN_PROGRESS /
+   COMPLETED / CANCELLED）均允许删除**——删除与 Task 状态机无关，
+   COMPLETED / CANCELLED 只表示任务的历史状态，不代表不可删除。删除
+   属于高风险操作，必须先经过确认，确认后执行物理 DELETE。
 7. **Confirmation 属于 Agent Runtime 的职责，不属于 Task：**
    - AI 触发删除：Agent Runtime 进入 `WAITING_CONFIRMATION` → 用户批准 →
      `resumeConfirmation({ runId, toolCallId, approved })` → **恢复原
@@ -76,12 +84,10 @@ Zod（IPC 边界 / Tool 输入输出校验）。
 
 ## 待确认事项（Pi 不得自行决定，发现即报告）
 
-- **删除范围冲突**：《后端交接说明书 V1.0》第 33 条规定 COMPLETED /
-  CANCELLED 任务不可删除；《架构与技术选型 V1.2》5.1 节规定任意状态均可
-  在确认后物理删除。两份文档结论矛盾，在人工明确拍板前，Pi 不得擅自
-  选择一种实现，须在 PHASE 3-A0 报告中列为待决策项。
-- 其他任何在审计中发现的 Domain / Schema / IPC 不一致（例如字段命名、
-  枚举值差异），同样按规则 9 的流程处理，不得自行拍板。
+- 任何在审计中发现的 Domain / Schema / IPC 不一致（例如字段命名、
+  枚举值差异），按规则 9 的流程处理，不得自行拍板：停止扩大修改范围 →
+  明确指出冲突 → 列出受影响文件 → 提出最小变更方案 → 未获确认不得
+  修改。
 
 ## 安全
 

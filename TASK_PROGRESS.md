@@ -2,7 +2,7 @@
 
 > 用途：pi 会话之间的任务交接文档。换会话 / 压缩前由 pi 更新本文件；新会话开头用 `@TASK_PROGRESS.md` 引用即可无缝接上。
 > 约定：标注「由 pi 填写」的章节由 pi 在会话中据实更新，不要留空提交。
-> 最后更新：2026-09-30（pi，PHASE 3-A 验收+提交后同步）
+> 最后更新：2026-09-30（pi，PHASE GATE SYNC：A0/3-A 门禁状态同步）
 
 ---
 
@@ -15,8 +15,23 @@ PHASE 3-A（SQLite Runtime Foundation）已完成、验收通过并提交（comm
 ## 1. 项目角色与当前阶段
 
 - 角色：**Pi = 后端 / Core 工程师**，不是架构决策者；前端 UI / Renderer 由 Google AI Studio 负责。
-- 当前阶段：**PHASE 3-A ✅ 已完成**（验收通过，commit `4f3fb8e`）；**PHASE 3-B（Migration）待人工批准，未开始**。
+
+**阶段门禁状态（以 git history 为准，`4f3fb8e` 已 push 至 origin/main）：**
+
+| 阶段 | 状态 |
+|---|---|
+| PHASE 3-A0（审计） | ✅ ACCEPTED |
+| PHASE 3-A（SQLite Runtime） | ✅ ACCEPTED & COMMITTED（`4f3fb8e`） |
+| PHASE 3-B（Migration） | ⛔ NOT STARTED / NOT AUTHORIZED |
+| PHASE 3-C（Repository 加固） | ⛔ NOT STARTED |
+| PHASE 3-D（TaskService SQLite DI 切换） | ⛔ NOT STARTED |
+| PHASE 3-E（IPC 复核，含 C6） | ⛔ NOT STARTED |
+| PHASE 3-F（重启持久化验收） | ⛔ NOT STARTED |
+| PHASE 3-G（事件一致性） | ⛔ NOT STARTED |
+
 - 阶段闸门：**未获人工明确批准「进入 PHASE 3-B」前，禁止创建 migrations/、001_init.sql、Migration Runner 或任何业务表。**
+- **context_id 是冻结的 3-B Schema 输入**：最终 3-B migration 应含 `context_id TEXT`（可空、当前不建 FK）；**在 3-B 之前不得把 context_id 提前加入 Domain、Drizzle schema 或 Repository**。
+- **前端状态（客观事实，本次不修）**：当前 Renderer 任务操作仍走本地 state 路径（`App.tsx`），尚未形成 Renderer → IPC → TaskService → Repository → SQLite 的完整任务持久化闭环；闭环在 3-D 之后、由前端负责方收敛（规则 14）。
 
 ## 2. 本轮任务目标
 
