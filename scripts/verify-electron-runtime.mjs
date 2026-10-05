@@ -19,24 +19,26 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const mode = process.argv[2] === 'packaged' ? 'packaged' : 'dev';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const electronExe = path.join(root, 'node_modules', 'electron', 'dist', 'electron.exe');
-const simDir = path.join(root, '.tmp-packaged-runtime');
-const logDir = path.join(root, '.tmp-packaged-runtime-logs');
+const runRoot = fs.mkdtempSync(path.join(os.tmpdir(), `ai-work-assistant-electron-${mode}-`));
+const simDir = path.join(runRoot, 'packaged-runtime');
+const logDir = path.join(runRoot, 'logs');
+const userDataDir = path.join(runRoot, 'userData');
+const dbPath = path.join(userDataDir, 'data.db');
 fs.mkdirSync(logDir, { recursive: true });
+fs.mkdirSync(userDataDir, { recursive: true });
 
 // 独立端口 + 显式 IPv4：避免与占用 3000 端口的其他 dev server 冲突，
 // 并使 vite 监听栈与 Chromium 对 localhost 的解析偏好（127.0.0.1）一致
 const DEV_PORT = 3123;
 const DEV_ORIGIN = `http://127.0.0.1:${DEV_PORT}`;
 const EXPECTED_TITLE = 'AI Work Assistant - 个人工作助手';
-
-const userDataDir = path.join(process.env.APPDATA, 'react-example');
-const dbPath = path.join(userDataDir, 'data.db');
 
 const results = [];
 function check(name, ok, detail = '') {
@@ -54,12 +56,6 @@ async function waitFor(fn, timeoutMs, interval = 500) {
     } catch { /* retry */ }
     if (Date.now() - t0 > timeoutMs) return null;
     await sleep(interval);
-  }
-}
-
-function cleanDbArtifacts() {
-  for (const suffix of ['', '-wal', '-shm']) {
-    try { fs.rmSync(dbPath + suffix, { force: true }); } catch { /* ignore */ }
   }
 }
 
@@ -102,7 +98,7 @@ let viteProc = null;
 let electronProc = null;
 
 async function main() {
-  console.log(`=== PHASE 3-A Runtime Verification (${mode}) ===`);
+  console.log(`=== PHASE 3-B Electron Runtime Verification (${mode}) ===`);
 
   if (!fs.existsSync(electronExe)) {
     check('A0 Electron 二进制存在', false, electronExe);
@@ -110,13 +106,16 @@ async function main() {
   }
   check('A0 Electron 二进制存在', true, electronExe);
 
-  cleanDbArtifacts();
-  check('前置：清理旧 data.db 以便验证真实创建', true);
+  console.log(`[isolation] temporary userData=${userDataDir}`);
 
   let electronArgs;
   let pageUrlPredicate;
   let spawnedExe = electronExe;
-  const electronEnv = { ...process.env, ELECTRON_ENABLE_LOGGING: '1' };
+  const electronEnv = {
+    ...process.env,
+    ELECTRON_ENABLE_LOGGING: '1',
+    ELECTRON_TEST_USER_DATA: userDataDir,
+  };
 
   if (mode === 'dev') {
     // 启动 vite dev server（Renderer 页面来源）
@@ -159,6 +158,8 @@ async function main() {
     };
     robocopy(path.join(root, 'dist-electron'), path.join(appDir, 'dist-electron'));
     console.log('[packaged-sim] step4 dist-electron 复制完成');
+    robocopy(path.join(root, 'migrations'), path.join(appDir, 'migrations'));
+    console.log('[packaged-sim] migrations copied');
     // 仅复制运行时必需内容（/XD 排除 build/deps/src 等编译期目录）
     robocopy(path.join(root, 'node_modules', 'better-sqlite3'), path.join(appDir, 'node_modules', 'better-sqlite3'),
       ['/XD', 'build', 'deps', 'src', 'test', 'benchmark']);
@@ -194,8 +195,19 @@ async function main() {
     const m = s.match(/\[Database\] initialized: (.+)/);
     return m ? { line: m[0], dbPath: m[1].trim() } : null;
   }, 60000);
+  const actualUserData = await waitFor(() => {
+    const s = fs.existsSync(outLog) ? fs.readFileSync(outLog, 'utf8') : '';
+    return s.match(/\[Test\] userData=(.+)/)?.[1]?.trim() || null;
+  }, 60000);
   check('A1 Electron 进程启动且 Main 执行', !!dbInitLine);
-  check('A2 DatabaseManager 初始化，路径位于 userData', !!dbInitLine && dbInitLine.dbPath === dbPath, dbInitLine?.dbPath || '未捕获');
+  check('A2a app.getPath(userData) 指向本次临时目录', actualUserData === userDataDir, actualUserData || '未捕获');
+  check('A2b DatabaseManager 初始化到临时 userData', !!dbInitLine && dbInitLine.dbPath === dbPath, dbInitLine?.dbPath || '未捕获');
+  const migrationLine = await waitFor(() => {
+    const s = fs.existsSync(outLog) ? fs.readFileSync(outLog, 'utf8') : '';
+    const m = s.match(/\[Database\] migrations applied=(\d+), skipped=(\d+)/);
+    return m ? { applied: Number(m[1]), skipped: Number(m[2]) } : null;
+  }, 60000);
+  check('B1 首次启动执行 001_init.sql', migrationLine?.applied === 1 && migrationLine.skipped === 0, JSON.stringify(migrationLine));
 
   // A4/A5/A6：CDP 断言 Renderer 边界
   const page = dbInitLine ? await findPageTarget(pageUrlPredicate) : null;
@@ -223,9 +235,9 @@ async function main() {
     check('A6 Renderer→IPC→Main→TaskService 链路', i?.success === true && i?.count >= 2, JSON.stringify(i));
   }
 
-  // A3：数据库文件真实生成
+  // Runtime migration must create the database only below this invocation's temporary userData.
   const dbExists = fs.existsSync(dbPath) && fs.statSync(dbPath).size >= 0;
-  check('A3 SQLite 文件真实生成', dbExists, dbPath);
+  check('A3 SQLite 文件位于临时 userData', dbExists, dbPath);
 
   // A8：优雅退出 → close
   gracefulQuit(electronPid);
@@ -240,15 +252,17 @@ async function main() {
   check('Preload 执行且暴露成功（stderr 可见 [Preload] 日志）',
     errContent.includes('[Preload] script executing') && errContent.includes('[Preload] electronAPI exposed'));
 
-  // A9：从外部用 better-sqlite3 复检（WAL 持久化 + 无业务表）
+  // Inspect the closed database from outside Electron after the real runtime migration.
   if (dbExists) {
     const { default: Database } = await import('better-sqlite3');
     const db = new Database(dbPath, { readonly: true, fileMustExist: true });
     const jm = db.pragma('journal_mode', { simple: true });
-    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
+    const migrations = db.prepare('SELECT migration_id FROM schema_migrations ORDER BY migration_id').all();
     db.close();
     check('A9a journal_mode=WAL 持久化生效', String(jm).toLowerCase() === 'wal', `journal_mode=${jm}`);
-    check('A9b 本阶段未创建任何业务表', tables.length === 0, `tables=${JSON.stringify(tables.map(t => t.name))}`);
+    check('B2 schema_migrations 与 tasks 存在', JSON.stringify(tables.map((table) => table.name)) === JSON.stringify(['schema_migrations', 'tasks']), JSON.stringify(tables.map((table) => table.name)));
+    check('B3 migration version 已登记', JSON.stringify(migrations) === JSON.stringify([{ migration_id: '001_init.sql' }]), JSON.stringify(migrations));
   }
 
   // 汇总
@@ -263,4 +277,5 @@ main()
   .finally(() => {
     if (electronProc?.pid) forceKillTree(electronProc.pid);
     if (viteProc?.pid) forceKillTree(viteProc.pid);
+    if ((process.exitCode ?? 0) === 0) fs.rmSync(runRoot, { recursive: true, force: true });
   });

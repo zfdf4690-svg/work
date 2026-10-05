@@ -12,6 +12,7 @@
 import { app } from 'electron';
 import path from 'node:path';
 import { DatabaseManager } from '../../core/db/databaseManager';
+import { MigrationRunner } from '../../core/db/migrationRunner';
 
 /** 数据库文件名：落位于 <userData>/data.db */
 export const DATABASE_FILE_NAME = 'data.db';
@@ -35,11 +36,15 @@ export async function initializeDatabase(): Promise<DatabaseManager> {
   databaseManager = new DatabaseManager({ databasePath: resolveDatabasePath() });
   await databaseManager.init();
 
-  console.log(`[Database] initialized: ${databaseManager.getDatabasePath()}`);
+  const migrationResult = new MigrationRunner(
+    databaseManager.getConnection(),
+    path.join(app.getAppPath(), 'migrations')
+  ).run();
 
-  // PHASE 3-B 接入点：Migration Runner 将在此处基于
-  // databaseManager.getConnection() 执行 migrations/ 下的待处理迁移，
-  // 迁移完成后才继续 Repository / TaskService 装配。当前阶段不实现。
+  console.log(`[Database] initialized: ${databaseManager.getDatabasePath()}`);
+  console.log(
+    `[Database] migrations applied=${migrationResult.applied.length}, skipped=${migrationResult.skipped.length}`
+  );
   return databaseManager;
 }
 

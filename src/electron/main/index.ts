@@ -13,6 +13,15 @@ import { initializeDatabase, closeDatabase } from './database';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const testUserDataPath = process.env.ELECTRON_TEST_USER_DATA;
+if (testUserDataPath) {
+  if (!path.isAbsolute(testUserDataPath)) {
+    throw new Error('[Test] ELECTRON_TEST_USER_DATA 必须是绝对路径');
+  }
+  app.setPath('userData', testUserDataPath);
+  console.log(`[Test] userData=${app.getPath('userData')}`);
+}
+
 let mainWindow: BrowserWindow | null = null;
 
 export function createMainWindow(): BrowserWindow {
