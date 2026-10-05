@@ -7,63 +7,91 @@
  * 2. 直接支持零摩擦物理落盘与并发事务
  */
 
-import { eq, and, like, gte, lte, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lte, or, sql, type SQL } from 'drizzle-orm';
+import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { ITaskRepository } from './taskRepository.interface';
 import { Task, TaskFilter } from '../../domain/task/task.types';
 import { TaskPriority, TaskSource, TaskStatus } from '../../domain/task/task.enums';
-import { tasksTable, TaskRow } from '../db/schema';
-
-export interface IDrizzleDb {
-  select: () => any;
-  insert: (table: any) => any;
-  update: (table: any) => any;
-  delete: (table: any) => any;
-}
+import * as schema from '../db/schema';
+import { NewTaskRow, TaskRow, tasksTable } from '../db/schema';
 
 export class DrizzleTaskRepository implements ITaskRepository {
-  constructor(private readonly db: IDrizzleDb) {}
+  constructor(private readonly db: BetterSQLite3Database<typeof schema>) {}
 
   private rowToEntity(row: TaskRow): Task {
-    let tags: string[] = [];
-    if (row.tagsJson) {
-      try {
-        tags = JSON.parse(row.tagsJson);
-      } catch {
-        tags = [];
-      }
-    }
+    const tags: string[] = row.tagsJson === null ? [] : JSON.parse(row.tagsJson);
 
     return {
       id: row.id,
       title: row.title,
-      description: row.description || undefined,
+      description: row.description ?? undefined,
       status: row.status as TaskStatus,
       priority: row.priority as TaskPriority,
-      dueAt: row.dueAt || null,
-      completedAt: row.completedAt || null,
+      dueAt: row.dueAt ?? null,
+      completedAt: row.completedAt ?? null,
       source: row.source as TaskSource,
-      category: row.category || undefined,
+      category: row.category ?? undefined,
       tags,
+      contextId: row.contextId ?? null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
   }
 
-  private entityToRow(task: Task): TaskRow {
+  private entityToRow(task: Task): NewTaskRow {
     return {
       id: task.id,
       title: task.title,
-      description: task.description || null,
+      description: task.description ?? null,
       status: task.status,
       priority: task.priority,
-      dueAt: task.dueAt || null,
-      completedAt: task.completedAt || null,
+      dueAt: task.dueAt ?? null,
+      completedAt: task.completedAt ?? null,
       source: task.source,
-      category: task.category || null,
+      category: task.category ?? null,
       tagsJson: task.tags && task.tags.length > 0 ? JSON.stringify(task.tags) : null,
+      contextId: task.contextId ?? null,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
     };
+  }
+
+  private buildConditions(filter?: TaskFilter): SQL[] {
+    const conditions: SQL[] = [];
+
+    if (filter?.status && filter.status.length > 0) {
+      conditions.push(inArray(tasksTable.status, filter.status));
+    }
+    if (filter?.priority && filter.priority.length > 0) {
+      conditions.push(inArray(tasksTable.priority, filter.priority));
+    }
+    if (filter?.source && filter.source.length > 0) {
+      conditions.push(inArray(tasksTable.source, filter.source));
+    }
+    if (filter?.category) {
+      conditions.push(sql`lower(${tasksTable.category}) = lower(${filter.category})`);
+    }
+    if (filter?.search) {
+      const escapedSearch = filter.search.replace(/[!%_]/g, '!$&');
+      const searchPattern = `%${escapedSearch}%`;
+      conditions.push(or(
+        sql`lower(${tasksTable.title}) LIKE lower(${searchPattern}) ESCAPE '!'`,
+        sql`lower(coalesce(${tasksTable.description}, '')) LIKE lower(${searchPattern}) ESCAPE '!'`
+      )!);
+    }
+    if (filter?.startDate) {
+      conditions.push(gte(tasksTable.createdAt, filter.startDate));
+    }
+    if (filter?.endDate) {
+      conditions.push(lte(tasksTable.createdAt, filter.endDate));
+    }
+
+    return conditions;
+  }
+
+  private whereClause(filter?: TaskFilter): SQL | undefined {
+    const conditions = this.buildConditions(filter);
+    return conditions.length > 0 ? and(...conditions) : undefined;
   }
 
   public async findById(id: string): Promise<Task | null> {
@@ -78,43 +106,20 @@ export class DrizzleTaskRepository implements ITaskRepository {
   }
 
   public async findMany(filter?: TaskFilter): Promise<Task[]> {
-    const conditions: any[] = [];
-
-    if (filter?.status && filter.status.length > 0) {
-      conditions.push(inArray(tasksTable.status, filter.status));
-    }
-    if (filter?.priority && filter.priority.length > 0) {
-      conditions.push(inArray(tasksTable.priority, filter.priority));
-    }
-    if (filter?.source && filter.source.length > 0) {
-      conditions.push(inArray(tasksTable.source, filter.source));
-    }
-    if (filter?.category) {
-      conditions.push(eq(tasksTable.category, filter.category));
-    }
-    if (filter?.search) {
-      conditions.push(like(tasksTable.title, `%${filter.search}%`));
-    }
-    if (filter?.startDate) {
-      conditions.push(gte(tasksTable.createdAt, filter.startDate));
-    }
-    if (filter?.endDate) {
-      conditions.push(lte(tasksTable.createdAt, filter.endDate));
-    }
-
-    let query = this.db.select().from(tasksTable);
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-
-    const rows: TaskRow[] = await query;
+    const rows = await this.db
+      .select()
+      .from(tasksTable)
+      .where(this.whereClause(filter))
+      .orderBy(desc(tasksTable.createdAt));
     return rows.map((r) => this.rowToEntity(r));
   }
 
   public async create(task: Task): Promise<Task> {
-    const row = this.entityToRow(task);
-    await this.db.insert(tasksTable).values(row);
-    return task;
+    const [row] = await this.db
+      .insert(tasksTable)
+      .values(this.entityToRow(task))
+      .returning();
+    return this.rowToEntity(row);
   }
 
   public async update(id: string, updates: Partial<Task>): Promise<Task | null> {
@@ -129,22 +134,28 @@ export class DrizzleTaskRepository implements ITaskRepository {
       updatedAt: new Date().toISOString(),
     };
 
-    const row = this.entityToRow(merged);
-    await this.db
+    const [row] = await this.db
       .update(tasksTable)
-      .set(row)
-      .where(eq(tasksTable.id, id));
+      .set(this.entityToRow(merged))
+      .where(eq(tasksTable.id, id))
+      .returning();
 
-    return merged;
+    return row ? this.rowToEntity(row) : null;
   }
 
   public async delete(id: string): Promise<boolean> {
-    const res = await this.db.delete(tasksTable).where(eq(tasksTable.id, id));
-    return true;
+    const deleted = await this.db
+      .delete(tasksTable)
+      .where(eq(tasksTable.id, id))
+      .returning({ id: tasksTable.id });
+    return deleted.length > 0;
   }
 
   public async count(filter?: TaskFilter): Promise<number> {
-    const tasks = await this.findMany(filter);
-    return tasks.length;
+    const [result] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(tasksTable)
+      .where(this.whereClause(filter));
+    return result.count;
   }
 }

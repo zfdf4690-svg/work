@@ -16,6 +16,7 @@ export interface Task {
   source: TaskSource;
   category?: string;
   tags?: string[];
+  contextId?: string | null;
   createdAt: string; // ISO 8601 string
   updatedAt: string; // ISO 8601 string
 }

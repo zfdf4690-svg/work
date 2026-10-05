@@ -18,6 +18,7 @@ export const tasksTable = sqliteTable('tasks', {
   source: text('source').notNull(),       // MANUAL | AI | CHAT | SYSTEM
   category: text('category'),
   tagsJson: text('tags_json'),            // JSON array of strings
+  contextId: text('context_id'),
   createdAt: text('created_at').notNull(),// ISO 8601 string
   updatedAt: text('updated_at').notNull(),// ISO 8601 string
 });

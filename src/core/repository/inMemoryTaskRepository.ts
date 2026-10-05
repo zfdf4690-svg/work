@@ -8,6 +8,12 @@
 import { ITaskRepository } from './taskRepository.interface';
 import { Task, TaskFilter } from '../../domain/task/task.types';
 
+function foldAsciiCase(value: string): string {
+  return value.replace(/[A-Z]/g, (character) =>
+    String.fromCharCode(character.charCodeAt(0) + 32)
+  );
+}
+
 export class InMemoryTaskRepository implements ITaskRepository {
   private tasks: Map<string, Task> = new Map();
 
@@ -40,15 +46,16 @@ export class InMemoryTaskRepository implements ITaskRepository {
     }
 
     if (filter.category) {
-      result = result.filter((t) => t.category?.toLowerCase() === filter.category!.toLowerCase());
+      const category = foldAsciiCase(filter.category);
+      result = result.filter((task) => task.category && foldAsciiCase(task.category) === category);
     }
 
     if (filter.search) {
-      const q = filter.search.toLowerCase();
+      const q = foldAsciiCase(filter.search);
       result = result.filter(
         (t) =>
-          t.title.toLowerCase().includes(q) ||
-          (t.description && t.description.toLowerCase().includes(q))
+          foldAsciiCase(t.title).includes(q) ||
+          (t.description && foldAsciiCase(t.description).includes(q))
       );
     }
 
