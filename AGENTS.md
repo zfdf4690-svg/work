@@ -10,12 +10,13 @@ project trust。请保持精简——只放"违反了会破坏架构"的硬约�
   代码（该部分由 Google AI Studio 负责）。
 - **Pi 是后端实施 Agent，不是架构决策者。** 任何架构 / 契约层面的取舍，
   发现即报告，不得自行拍板。
-- 当前所处阶段：**PHASE 3-B ✅ ACCEPTED & COMMITTED**（commit `8b41171`，
-  Migration Runner + `001_init.sql` + Main 初始化接入 + dev/packaged Runtime 验证全绿）。
-  PHASE 3-A0：ACCEPTED；PHASE 3-A：ACCEPTED & COMMITTED（`4f3fb8e`）。
-  **PHASE 3-C（Repository）：NOT STARTED / NOT AUTHORIZED**；未获人工明确批准前
-  不得开始 3-C。3-D DI 切换 / 3-E IPC 复核 / 3-F 重启持久化验收 /
-  3-G 事件一致性均未开始。详细进度见 `TASK_PROGRESS.md`。
+- 当前所处阶段：**PHASE 3-C ✅ ACCEPTED & COMMITTED**（commit `05057dc`，
+  SQLite Task Repository + `contextId` Domain/Drizzle 同步 + 隔离 Repository tests）。
+  PHASE 3-A0：ACCEPTED；PHASE 3-A：ACCEPTED & COMMITTED（`4f3fb8e`）；
+  PHASE 3-B：ACCEPTED & COMMITTED（`8b41171`）。
+  **PHASE 3-D（TaskService SQLite DI）：NOT STARTED / NOT AUTHORIZED**；未获人工明确批准前
+  不得开始 3-D。3-E IPC 复核 / 3-F 重启持久化验收 / 3-G 事件一致性均未开始。
+  详细进度见 `TASK_PROGRESS.md`。
 
 ## 技术栈（已冻结，不要更换）
 

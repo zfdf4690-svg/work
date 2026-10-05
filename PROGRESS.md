@@ -1,26 +1,27 @@
 # 项目进度 · PHASE 3 交接文档
 
-> 最后更新：2026-10-05（PHASE 3-B ✅ ACCEPTED & COMMITTED `8b41171`；3-C 未授权）
+> 最后更新：2026-10-05（PHASE 3-C ✅ ACCEPTED & COMMITTED `05057dc`；3-D 未授权）
 > 新会话接手时：**先读本文件，再读 `AGENTS.md` 和 `.pi/skills/backend-task-pipeline/SKILL.md`**
 
 ---
 
 ## 1. 当前阶段
 
-**已完成**：PHASE 3-A0 ✅ ACCEPTED；PHASE 3-A ✅ ACCEPTED & COMMITTED（`4f3fb8e`）；PHASE 3-B ✅ ACCEPTED & COMMITTED（`8b41171`）：Migration Runner、`001_init.sql`、启动接入及 dev/packaged Runtime 验证。
-**当前状态**：⏸ **PHASE 3-C NOT STARTED / NOT AUTHORIZED**，等待人工批准。
-**未开始**：3-C Repository 加固 / 3-D TaskService SQLite DI / 3-E IPC 复核 / 3-F 重启持久化验收 / 3-G 事件一致性。
+**已完成**：PHASE 3-A0 ✅ ACCEPTED；PHASE 3-A ✅ ACCEPTED & COMMITTED（`4f3fb8e`）；PHASE 3-B ✅ ACCEPTED & COMMITTED（`8b41171`）；PHASE 3-C ✅ ACCEPTED & COMMITTED（`05057dc`）：SQLite Repository、Domain/Drizzle `contextId` 同步及隔离专项测试。
+**当前状态**：⏸ **PHASE 3-D NOT STARTED / NOT AUTHORIZED**，等待人工批准。
+**未开始**：3-D TaskService SQLite DI / 3-E IPC 复核 / 3-F 重启持久化验收 / 3-G 事件一致性。
 
 ## 2. 环境与仓库关键事实
 
 - 工作区：`E:\系统默认\桌面\个人办公助手1`（WSL 中为 `/mnt/e/...`）；项目根 = `work/`
 - Electron + React + TypeScript + SQLite + Drizzle ORM + Zod（冻结栈，禁 Python/FastAPI）
 - 依赖已装：`better-sqlite3@13.0.3`、`drizzle-orm@0.45.3`；**未装**：drizzle-kit（禁止）、electron-rebuild（3-A 实证不需要）、electron-builder（需审批）
-- 运行时现状（3-B 后）：Migration 在 IPC 注册前运行；`schema_migrations` + `tasks` 由 `001_init.sql` 创建。IPC handler 仍注入 `InMemoryTaskRepository`，**应用任务数据仍重启丢失**，3-D 才切换
+- 运行时现状（3-C 后）：SQLite Repository 已可独立完成 CRUD/count；生产 IPC handler 仍注入 `InMemoryTaskRepository`，**应用任务数据仍重启丢失**，3-D 才切换
+- Schema：Task `contextId?: string | null` ↔ Drizzle `context_id` ↔ 3-B migration 已有 nullable TEXT 列；未新增 migration 或 FK
 - migration：轻量 `MigrationRunner` 已建，tracking 为 `schema_migrations`；dev/packaged 均使用隔离临时 userData 验证
-- 验证全绿：lint、smoke:core、smoke:test、Vite build、migration smoke；Electron dev **18/18**、packaged **17/17**。build 有 >500 KB chunk 提示
+- 验证全绿：lint/typecheck、smoke:core、smoke:test、Vite build、migration smoke、Repository CRUD/mapping/filter/count/delete/error tests。Vite build 有 >500 KB chunk 提示
 - Electron 44.4.5 二进制已补齐（npm postinstall 曾未下载 dist/，手动下载 + SHA256 校验）
-- git：3-B 实现 commit `8b41171`；本地领先 origin/main 1 个提交（未 push）；历史换行符 churn 仍在；`.pi/` 未跟踪（不纳入 3-B commit）；`.env*` 已被 .gitignore 忽略
+- git：3-C 实现 commit `05057dc`；历史换行符 churn 仍在；`.pi/` 未跟踪且未纳入阶段提交；`.env*` 已被 .gitignore 忽略
 - 一键启动：`start-app.cmd`（双击：构建→vite@3123→Electron；关窗自动清理）
 
 ## 3. 已冻结裁决（C1~C5）—— 不得推翻，变更须走 AGENTS.md 规则 9
@@ -44,7 +45,7 @@
 
 1. **3-A SQLite Runtime**：✅ 已完成（`4f3fb8e`）。ABI 实证无需 electron-rebuild（Electron 44.4.5 = N-API 10 = better-sqlite3@13）；打包验证以 `resources/app` + exe 重命名仿真完成（electron-builder 仍未装、需审批）
 2. **3-B Migration**：✅ 已完成并提交（`8b41171`）；临时 userData Dev/Packaged 实测 migration 创建、tracking、幂等和安全边界通过
-3. **3-C Repository 加固**：`drizzleTaskRepository.ts` 去 `any`（`IDrizzleDb` → 真实 Drizzle 类型）、真 `COUNT(*)`、修 `delete()` 恒返回 true、统一两实现 search 语义
+3. **3-C Repository 加固**：✅ 已完成并提交（`05057dc`）；真实 Drizzle 类型、数据库 COUNT、物理删除结果、筛选语义对齐及 Repository 测试通过
 4. **3-D DI 切换**：handlers.ts 注入 SQLite Repository（先删种子，切换后补持久化种子）
 5. **3-E IPC 复核**：含 C6 事件广播修复
 6. **3-F/3-G**：重启持久化验证 + 事件时序/广播端到端验证

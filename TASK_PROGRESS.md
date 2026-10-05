@@ -2,7 +2,7 @@
 
 > 用途：pi 会话之间的任务交接文档。换会话 / 压缩前由 pi 更新本文件；新会话开头用 `@TASK_PROGRESS.md` 引用即可无缝接上。
 > 约定：标注「由 pi 填写」的章节由 pi 在会话中据实更新，不要留空提交。
-> 最后更新：2026-10-05（PHASE 3-B 验收并提交 `8b41171`）
+> 最后更新：2026-10-05（PHASE 3-C 验收并提交 `05057dc`）
 
 ---
 
@@ -10,7 +10,7 @@
 
 > 用 2–3 句说清：现在做到哪、卡在哪、下一步是什么。
 
-PHASE 3-B（SQLite Migration & Task Schema）已完成验收并提交（commit `8b41171`）：Migration Runner + `001_init.sql` + Main 启动接入，临时 userData 下 Dev 18/18、Packaged 17/17，migration/schema/约束/重启测试及现有回归全绿。当前 STOP，等待人工明确授权进入 PHASE 3-C；3-C 未开始。HEAD `8b41171`，尚未 push。
+PHASE 3-C（SQLite Repository Implementation）已完成验收并提交（commit `05057dc`）：Repository 使用 DatabaseManager connection 构造的 Drizzle client，完成 CRUD/count/filter、contextId 与 tags/null/time 映射和四状态物理删除测试。当前 STOP，等待人工明确授权进入 PHASE 3-D；未进行 SQLite Repository 的生产注入。
 
 ## 1. 项目角色与当前阶段
 
@@ -23,22 +23,22 @@ PHASE 3-B（SQLite Migration & Task Schema）已完成验收并提交（commit `
 | PHASE 3-A0（审计） | ✅ ACCEPTED |
 | PHASE 3-A（SQLite Runtime） | ✅ ACCEPTED & COMMITTED（`4f3fb8e`） |
 | PHASE 3-B（Migration） | ✅ ACCEPTED & COMMITTED（`8b41171`） |
-| PHASE 3-C（Repository 加固） | ⛔ NOT STARTED / NOT AUTHORIZED |
-| PHASE 3-D（TaskService SQLite DI 切换） | ⛔ NOT STARTED |
+| PHASE 3-C（Repository 加固） | ✅ ACCEPTED & COMMITTED（`05057dc`） |
+| PHASE 3-D（TaskService SQLite DI 切换） | ⛔ NOT STARTED / NOT AUTHORIZED |
 | PHASE 3-E（IPC 复核，含 C6） | ⛔ NOT STARTED |
 | PHASE 3-F（重启持久化验收） | ⛔ NOT STARTED |
 | PHASE 3-G（事件一致性） | ⛔ NOT STARTED |
 
-- 阶段闸门：**PHASE 3-B 已验收提交；未获人工明确批准「进入 PHASE 3-C」前，不得开始 Repository 实现。**
-- **context_id 已按 3-B 冻结 Schema 落地**：`001_init.sql` 含可空 `context_id TEXT`、无 FK；Domain/Drizzle/Repository 未修改。
+- 阶段闸门：**PHASE 3-C 已验收提交；未获人工明确批准「进入 PHASE 3-D」前，不得切换 TaskService / IPC 到 SQLite Repository。**
+- **contextId 已按架构裁决同步**：Domain `contextId?: string | null` ↔ Drizzle `context_id` ↔ 3-B 的 nullable TEXT；无 FK，未修改 migration。
 - **前端状态（客观事实，本次不修）**：当前 Renderer 任务操作仍走本地 state 路径（`App.tsx`），尚未形成 Renderer → IPC → TaskService → Repository → SQLite 的完整任务持久化闭环；闭环在 3-D 之后、由前端负责方收敛（规则 14）。
 
 ## 2. 本轮任务目标
 
-> PHASE 3-A0、3-A 与 3-B 均已完成，详见第 3 节。下一阶段 3-C 需人工授权；本文件不授权自动进入。
+> PHASE 3-A0、3-A、3-B 与 3-C 均已完成，详见第 3 节。下一阶段 3-D 需人工授权；本文件不授权自动进入。
 
-- PHASE 3-B 已完成：迁移 SQL、Runner 与 Main 初始化 wiring；保留 InMemory Repository，未改 Domain/Drizzle/Repository/TaskService/IPC/Renderer。
-- PHASE 3-C（待授权）：Repository 加固；本阶段不得提前实施。
+- PHASE 3-C 已完成：SQLite Repository 实现及独立测试；未修改 TaskService/IPC/Renderer，也未切换生产注入。
+- PHASE 3-D（待授权）：TaskService SQLite DI 切换；本阶段不得提前实施。
 
 ## 3. 已完成（由 pi 填写）
 
@@ -46,6 +46,12 @@ PHASE 3-B（SQLite Migration & Task Schema）已完成验收并提交（commit `
 - [x] PHASE 3-A `src/core/db/databaseManager.ts`：IDatabaseConnection 实现；WAL / foreign_keys / busy_timeout=5000 / synchronous=NORMAL；零业务表；`getConnection()` 为后续 Repository 入口；纯 Node 不 import electron、不进 core barrel（防泄入 Renderer bundle）
 - [x] `src/electron/main/database.ts` 组合根：`userData/data.db` + 单例 init/get/close
 - [x] PHASE 3-B `migrations/001_init.sql` + `MigrationRunner`：transactional apply + `schema_migrations` tracking + 幂等跳过
+- [x] PHASE 3-C contextId 契约同步：`Task.contextId?: string | null` 与 Drizzle `contextId`/`context_id`，migration 保持未改
+- [x] `DrizzleTaskRepository` 使用 `BetterSQLite3Database<typeof schema>`；移除 any adapter；实现 create/findById/findMany/update/delete/count，COUNT(*)、真实 returning、SQL 错误传播
+- [x] 字段映射：tags JSON array/NULL；contextId string/null/undefined→TEXT/NULL；nullable text/date 不折叠空字符串；timestamps 原样 round-trip
+- [x] `InMemoryTaskRepository` 与 SQLite category/search ASCII case-insensitive 语义一致
+- [x] Repository 专项测试：CRUD、filter/count、所有枚举值、四种状态删除、tags/contextId/null/timestamps、SQL failure propagation
+- [x] PHASE 3-C commit `05057dc`（5 个授权文件）；Domain/Schema/Repository/Tests 范围审计通过，TaskService/IPC/Renderer/Migration/Runtime 未改
 - [x] Main 初始化在 IPC 注册前执行 migration；验证脚本通过测试专用 `ELECTRON_TEST_USER_DATA` / `app.setPath('userData', ...)` 隔离，不改变正式 userData 解析
 - [x] Migration smoke：首次执行、幂等、13 列/可空性/主键、status/priority/source CHECK、context_id 写入且无 FK、重启后数据与版本保留
 - [x] Electron Runtime：Dev **18/18**（隔离临时 userData）；Packaged **17/17**（隔离临时 userData）；preload/sandbox/IPC 基线通过
@@ -62,15 +68,16 @@ PHASE 3-B（SQLite Migration & Task Schema）已完成验收并提交（commit `
 
 ## 4. 进行中 / 阻塞（由 pi 填写）
 
-- 当前 STOP，等待人工明确批准「进入 PHASE 3-C」；不得自动开始
+- 当前 STOP，等待人工明确批准「进入 PHASE 3-D」；不得自动开始
 - electron-builder 未安装（需审批）；当前打包验证用 `resources/app` + exe 重命名仿真（等价 unpacked 产物）
 - 本轮 Runtime 使用隔离临时 userData；默认 `%APPDATA%\react-example\data.db` 未被本轮再次触碰。只读复核确认已有 `001_init.sql` 登记，tasks 行数为 0
-- HEAD `8b41171`，本地领先 `origin/main` 1 个提交；本轮未 push
+- 默认用户数据库未被本阶段测试触碰；Repository 专项测试和 migration smoke 均使用 OS 临时数据库
+- PHASE 3-C 提交 `05057dc`；阶段文档待单独提交
 
 ## 5. 待办（由 pi 填写）
 
 - [x] PHASE 3-B：Migration + schema 验收完成并提交 `8b41171`
-- [ ] PHASE 3-C：SQLite Repository 完整实现（含真实 count()，替换占位）
+- [x] PHASE 3-C：SQLite Repository 完整实现并提交 `05057dc`
 - [ ] PHASE 3-D：IPC 注入切换 InMemory→SQLite + 重启持久化验证
 - [ ] PHASE 3-E/3-G：C6 事件广播契约统一（handlers.ts:89 裸事件 vs contracts.ts EventBroadcastPayload on `event:broadcast`，以 preload/contracts 为准）
 - [ ] Tool Registry 阶段：C7 ToolDefinition 补 `outputSchema`/`permissions`（非 PHASE 3）
@@ -112,11 +119,11 @@ PHASE 3-B（SQLite Migration & Task Schema）已完成验收并提交（commit `
 
 ## 8. 下一步
 
-- 等待人工明确批准：**「进入 PHASE 3-C」**。
-- 获批后只执行 3-C Repository 加固；3-B 已完成，本轮不得自动推进。
+- 等待人工明确批准：**「进入 PHASE 3-D」**。
+- 获批后只执行 3-D TaskService SQLite DI；3-C 已完成，本轮不得自动推进。
 
 ## 9. 交接引导词（可直接粘贴给 pi）
 
 ```
-继续 AI Work Assistant 后端任务。先读 @AGENTS.md、@TASK_PROGRESS.md 和 `.pi/skills/backend-task-pipeline/SKILL.md`。当前 PHASE 3-B 已验收并提交 `8b41171`；PHASE 3-C 未开始且未授权。未经人工明确批准不得进入 3-C；获批后严格按对应阶段范围执行，不得扩大到 3-D 或 Renderer。
+继续 AI Work Assistant 后端任务。先读 @AGENTS.md、@TASK_PROGRESS.md 和 `.pi/skills/backend-task-pipeline/SKILL.md`。当前 PHASE 3-C 已验收并提交 `05057dc`；PHASE 3-D 未开始且未授权。未经人工明确批准不得进入 3-D；获批后严格按对应阶段范围执行，不得扩大到 3-E 或 Renderer。
 ```
