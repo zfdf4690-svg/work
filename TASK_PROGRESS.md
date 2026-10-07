@@ -10,7 +10,7 @@
 
 > 用 2–3 句说清：现在做到哪、卡在哪、下一步是什么。
 
-PHASE 3-C（SQLite Repository Implementation）已完成验收并提交（commit `05057dc`）：Repository 使用 DatabaseManager connection 构造的 Drizzle client，完成 CRUD/count/filter、contextId 与 tags/null/time 映射和四状态物理删除测试。当前 STOP，等待人工明确授权进入 PHASE 3-D；未进行 SQLite Repository 的生产注入。
+PHASE 3-D（TaskService → SQLite Repository DI）已完成验收并提交（commit `3dbbdfd`）：TaskService 生产装配已切到 SQLite Repository，保留 InMemory 作为测试/fixture，且保持唯一业务入口。当前已进入 PHASE 3-E（IPC 复核 + Zod contract），重点是确保 `Renderer -> Preload -> IPC -> Zod -> TaskService -> SQLite` 的真实链路并保留 3-D 变更范围。
 
 ## 1. 项目角色与当前阶段
 
@@ -24,12 +24,12 @@ PHASE 3-C（SQLite Repository Implementation）已完成验收并提交（commit
 | PHASE 3-A（SQLite Runtime） | ✅ ACCEPTED & COMMITTED（`4f3fb8e`） |
 | PHASE 3-B（Migration） | ✅ ACCEPTED & COMMITTED（`8b41171`） |
 | PHASE 3-C（Repository 加固） | ✅ ACCEPTED & COMMITTED（`05057dc`） |
-| PHASE 3-D（TaskService SQLite DI 切换） | ⛔ NOT STARTED / NOT AUTHORIZED |
-| PHASE 3-E（IPC 复核，含 C6） | ⛔ NOT STARTED |
-| PHASE 3-F（重启持久化验收） | ⛔ NOT STARTED |
+| PHASE 3-D（TaskService SQLite DI 切换） | ✅ ACCEPTED & COMMITTED（`3dbbdfd`） |
+| PHASE 3-E（IPC 复核，含 C6） | ✅ AUTHORIZED / IN PROGRESS |
+| PHASE 3-F（重启持久化验收） | ⛔ NOT STARTED / NOT AUTHORIZED |
 | PHASE 3-G（事件一致性） | ⛔ NOT STARTED |
 
-- 阶段闸门：**PHASE 3-C 已验收提交；未获人工明确批准「进入 PHASE 3-D」前，不得切换 TaskService / IPC 到 SQLite Repository。**
+- 阶段闸门：**PHASE 3-D 已验收提交并已进入 3-E；3-E 仅允许修改 IPC / Zod / Preload / 相关测试，且不得扩展到 Renderer / TaskService 业务逻辑 / Migration / Agent。**
 - **contextId 已按架构裁决同步**：Domain `contextId?: string | null` ↔ Drizzle `context_id` ↔ 3-B 的 nullable TEXT；无 FK，未修改 migration。
 - **前端状态（客观事实，本次不修）**：当前 Renderer 任务操作仍走本地 state 路径（`App.tsx`），尚未形成 Renderer → IPC → TaskService → Repository → SQLite 的完整任务持久化闭环；闭环在 3-D 之后、由前端负责方收敛（规则 14）。
 
@@ -37,8 +37,8 @@ PHASE 3-C（SQLite Repository Implementation）已完成验收并提交（commit
 
 > PHASE 3-A0、3-A、3-B 与 3-C 均已完成，详见第 3 节。下一阶段 3-D 需人工授权；本文件不授权自动进入。
 
-- PHASE 3-C 已完成：SQLite Repository 实现及独立测试；未修改 TaskService/IPC/Renderer，也未切换生产注入。
-- PHASE 3-D（待授权）：TaskService SQLite DI 切换；本阶段不得提前实施。
+- PHASE 3-D 已完成：TaskService 生产装配已切换到 SQLite Repository，保持唯一业务入口；保留 InMemory 作为测试/fixture。
+- PHASE 3-E（已授权）：IPC 复核 + Zod validation + 真正的 SQLite 端到端验证；本阶段不得扩大到 3-F / Renderer / Agent Runtime。
 
 ## 3. 已完成（由 pi 填写）
 
