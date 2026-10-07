@@ -2,7 +2,7 @@
 
 > 用途：pi 会话之间的任务交接文档。换会话 / 压缩前由 pi 更新本文件；新会话开头用 `@TASK_PROGRESS.md` 引用即可无缝接上。
 > 约定：标注「由 pi 填写」的章节由 pi 在会话中据实更新，不要留空提交。
-> 最后更新：2026-10-07（PHASE 3-G ✅ ACCEPTED：C6 广播修复及 Electron E2E 全通过）
+> 最后更新：2026-10-07（PHASE 3-G ✅ ACCEPTED & COMMITTED `a363188`）
 
 ---
 
@@ -10,7 +10,7 @@
 
 > 用 2–3 句说清：现在做到哪、卡在哪、下一步是什么。
 
-PHASE 3-D 至 PHASE 3-F 已验收并提交（`3dbbdfd`、`8766223`、`5ca8015`）。PHASE 3-G 已修复 C6 Main broadcast channel/payload mismatch，并通过真实 Electron E2E 验证 Renderer `events.on()` 收到 Task 生命周期事件；阶段完成后停止，不自动进入 3-H。
+PHASE 3-D 至 PHASE 3-G 已验收并提交（`3dbbdfd`、`8766223`、`5ca8015`、`a363188`）。3-G 修复了 C6 Main broadcast channel/payload mismatch，并通过真实 Electron E2E 验证 Renderer `events.on()` 收到 Task 生命周期事件；阶段完成后停止，不自动进入 3-H。
 
 ## 1. 项目角色与当前阶段
 
@@ -25,11 +25,11 @@ PHASE 3-D 至 PHASE 3-F 已验收并提交（`3dbbdfd`、`8766223`、`5ca8015`�
 | PHASE 3-B（Migration） | ✅ ACCEPTED & COMMITTED（`8b41171`） |
 | PHASE 3-C（Repository 加固） | ✅ ACCEPTED & COMMITTED（`05057dc`） |
 | PHASE 3-D（TaskService SQLite DI 切换） | ✅ ACCEPTED & COMMITTED（`3dbbdfd`） |
-| PHASE 3-E（IPC 复核，含 C6） | ✅ ACCEPTED & COMMITTED（`8766223`） |
+| PHASE 3-E（IPC 复核） | ✅ ACCEPTED & COMMITTED（`8766223`） |
 | PHASE 3-F（重启持久化验收） | ✅ ACCEPTED & COMMITTED（`5ca8015`） |
-| PHASE 3-G（Task Event Broadcast） | ✅ ACCEPTED（C6 修复 + 真实 Electron E2E） |
+| PHASE 3-G（Task Event Broadcast） | ✅ ACCEPTED & COMMITTED（`a363188`） |
 
-- 阶段闸门：**3-D 至 3-F 已验收并提交；3-G C6 已修复且 E2E 全通过；本阶段完成后 STOP，不得自动进入 3-H。**
+- 阶段闸门：**3-D 至 3-G 已验收并提交；本阶段完成后 STOP，不得自动进入 3-H。**
 - **contextId 已按架构裁决同步**：Domain `contextId?: string | null` ↔ Drizzle `context_id` ↔ 3-B migration 的 nullable TEXT；无 FK，未改历史 migration。
 - **前端状态（客观事实，本次不修）**：当前 Renderer 任务操作仍以本地 state 路径为主，尚未完全与 SQLite 持久化闭环收敛；该收敛由前端负责方按后续阶段处理。
 
@@ -55,13 +55,13 @@ PHASE 3-D 至 PHASE 3-F 已验收并提交（`3dbbdfd`、`8766223`、`5ca8015`�
 - [x] PHASE 3-F HARD GATE A：独立 Node Process A 写入并退出；Process B 对同一 DB 全字段读回；四状态物理删除、confirmation 与 migration 非破坏性验证通过
 - [x] PHASE 3-F HARD GATE B：真实 Electron A 经 Renderer/Preload/IPC create/update 并完整退出；Electron B 重启后经 IPC 读回一致 Task；同一临时 userData/DB，migration 跳过，SQLite 行存在
 - [x] PHASE 3-F 验证命令：`node scripts/phase3f-process-restart.mjs`、`node scripts/verify-electron-runtime.mjs phase3f`、lint、Repository/Service tests、smoke、Vite/Electron build 全通过
-- [x] PHASE 3-G C6：Main 改用 `event:broadcast` 并发送 `{ event }`，未改 IPC Contract / Preload API / EventBus / TaskService
+- [x] PHASE 3-G commit `a363188`：Main 改用 `event:broadcast` 并发送 `{ event }`，未改 IPC Contract / Preload API / EventBus / TaskService
 - [x] PHASE 3-G 真实 Electron E2E：通过 `window.electronAPI.events.on()` 验证 TaskCreated / TaskUpdated / TaskCompleted / TaskDeleted、Task ID、SQLite 查询可见、失败 update 不广播；47/47 检查通过
 - [x] PHASE 3-G 回归：lint、Repository/Service/IPC tests、smoke:core、smoke:test、Vite build、Electron build 全通过
 
 ## 4. 进行中 / 阻塞（由 pi 填写）
 
-- PHASE 3-F 两个 HARD GATE 与项目验证均已通过并提交（`5ca8015`）。
+- PHASE 3-F 与 3-G 验收已提交（`5ca8015`、`a363188`）。
 - 当前 STOP：PHASE 3-G 已完成；不得自动进入 PHASE 3-H。
 - 生产 Domain、Repository、TaskService、IPC Contract、Preload API、Renderer/UI、Agent、MCP 均未修改；未新增 migration。
 
@@ -107,5 +107,5 @@ PHASE 3-D 至 PHASE 3-F 已验收并提交（`3dbbdfd`、`8766223`、`5ca8015`�
 ## 9. 交接引导词（可直接粘贴给 pi）
 
 ```
-继续 AI Work Assistant 后端任务。先读 @AGENTS.md、@TASK_PROGRESS.md 和 `.pi/skills/backend-task-pipeline/SKILL.md`。PHASE 3-D 至 3-F 已验收并提交；PHASE 3-G C6 Broadcast Adapter 已修复并通过真实 Electron E2E。根据阶段指令立即停止，不得自动进入 PHASE 3-H；Renderer UI 实时刷新、Agent、MCP 与 Migration 均不在本次范围。
+继续 AI Work Assistant 后端任务。先读 @AGENTS.md、@TASK_PROGRESS.md 和 `.pi/skills/backend-task-pipeline/SKILL.md`。PHASE 3-D 至 3-G 已验收并提交（3-G：`a363188`）。根据阶段指令立即停止，不得自动进入 PHASE 3-H；Renderer UI 实时刷新、Agent、MCP 与 Migration 均不在本次范围。
 ```

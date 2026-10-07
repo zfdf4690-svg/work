@@ -1,6 +1,6 @@
 # 项目进度 · PHASE 3 交接文档
 
-> 最后更新：2026-10-07（PHASE 3-G ✅ ACCEPTED：C6 Event Broadcast 修复及真实 Electron E2E 通过）
+> 最后更新：2026-10-07（PHASE 3-G ✅ ACCEPTED & COMMITTED `a363188`）
 > 新会话接手时：**先读本文件，再读 `AGENTS.md` 和 `.pi/skills/backend-task-pipeline/SKILL.md`**
 
 ---
@@ -9,7 +9,7 @@
 
 **已完成**：PHASE 3-A0 ✅ ACCEPTED；PHASE 3-A ✅ ACCEPTED & COMMITTED（`4f3fb8e`）；PHASE 3-B ✅ ACCEPTED & COMMITTED（`8b41171`）；PHASE 3-C ✅ ACCEPTED & COMMITTED（`05057dc`）；PHASE 3-D ✅ ACCEPTED & COMMITTED（`3dbbdfd`）：TaskService 已切到 SQLite Repository；PHASE 3-E ✅ ACCEPTED & COMMITTED（`8766223`）：IPC/Zod/SQLite 真实链路与验证通过。
 **当前状态**：PHASE 3-F ✅ ACCEPTED & COMMITTED（`5ca8015`）；Process A→B 与 Electron A→B Restart HARD GATE 均通过。
-**当前状态**：PHASE 3-G ✅ ACCEPTED：C6 已修复，真实 Electron Renderer → Preload → IPC → TaskService → SQLite → EventBus → IPC Broadcast → Renderer E2E 通过。
+**当前状态**：PHASE 3-G ✅ ACCEPTED & COMMITTED（`a363188`）：C6 已修复，真实 Electron Renderer → Preload → IPC → TaskService → SQLite → EventBus → IPC Broadcast → Renderer E2E 通过。
 
 ## 2. 环境与仓库关键事实
 
