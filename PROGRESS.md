@@ -1,6 +1,6 @@
 # 项目进度 · PHASE 3 交接文档
 
-> 最后更新：2026-10-07（PHASE 3-F 两个 Restart HARD GATE 验证通过；阶段提交审计待完成；3-G 未授权）
+> 最后更新：2026-10-07（PHASE 3-F ✅ ACCEPTED & COMMITTED `5ca8015`；3-G 未授权）
 > 新会话接手时：**先读本文件，再读 `AGENTS.md` 和 `.pi/skills/backend-task-pipeline/SKILL.md`**
 
 ---
@@ -8,7 +8,7 @@
 ## 1. 当前阶段
 
 **已完成**：PHASE 3-A0 ✅ ACCEPTED；PHASE 3-A ✅ ACCEPTED & COMMITTED（`4f3fb8e`）；PHASE 3-B ✅ ACCEPTED & COMMITTED（`8b41171`）；PHASE 3-C ✅ ACCEPTED & COMMITTED（`05057dc`）；PHASE 3-D ✅ ACCEPTED & COMMITTED（`3dbbdfd`）：TaskService 已切到 SQLite Repository；PHASE 3-E ✅ ACCEPTED & COMMITTED（`8766223`）：IPC/Zod/SQLite 真实链路与验证通过。
-**当前状态**：PHASE 3-F 已获授权，Process A→B 与 Electron A→B Restart HARD GATE 均通过；阶段提交审计待完成。
+**当前状态**：PHASE 3-F ✅ ACCEPTED & COMMITTED（`5ca8015`）；Process A→B 与 Electron A→B Restart HARD GATE 均通过。
 **未开始 / 未授权**：PHASE 3-G 事件一致性。
 
 ## 2. 环境与仓库关键事实

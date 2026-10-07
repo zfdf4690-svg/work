@@ -2,7 +2,7 @@
 
 > 用途：pi 会话之间的任务交接文档。换会话 / 压缩前由 pi 更新本文件；新会话开头用 `@TASK_PROGRESS.md` 引用即可无缝接上。
 > 约定：标注「由 pi 填写」的章节由 pi 在会话中据实更新，不要留空提交。
-> 最后更新：2026-10-07（PHASE 3-F 两个 Restart HARD GATE 全通过；阶段提交审计待完成；3-G 未授权）
+> 最后更新：2026-10-07（PHASE 3-F ✅ ACCEPTED & COMMITTED `5ca8015`；3-G 未授权）
 
 ---
 
@@ -10,7 +10,7 @@
 
 > 用 2–3 句说清：现在做到哪、卡在哪、下一步是什么。
 
-PHASE 3-D 与 PHASE 3-E 已完成并提交：`3dbbdfd` 和 `8766223`。PHASE 3-F 已获授权；真实独立 Node 进程 A→B 与 Electron A→B 重启验证均通过，使用同一临时 SQLite DB，Electron 恢复通过真实 Renderer → Preload → IPC 链路。当前 3-F 测试验证已完成，阶段提交审计待完成；3-G 未授权，不得开始。
+PHASE 3-D 与 PHASE 3-E 已完成并提交：`3dbbdfd` 和 `8766223`。PHASE 3-F 已验收并提交（`5ca8015`）；真实独立 Node 进程 A→B 与 Electron A→B 重启验证均通过，使用同一临时 SQLite DB，Electron 恢复通过真实 Renderer → Preload → IPC 链路。PHASE 3-G 未授权，不得开始。
 
 ## 1. 项目角色与当前阶段
 
@@ -26,7 +26,7 @@ PHASE 3-D 与 PHASE 3-E 已完成并提交：`3dbbdfd` 和 `8766223`。PHASE 3-F
 | PHASE 3-C（Repository 加固） | ✅ ACCEPTED & COMMITTED（`05057dc`） |
 | PHASE 3-D（TaskService SQLite DI 切换） | ✅ ACCEPTED & COMMITTED（`3dbbdfd`） |
 | PHASE 3-E（IPC 复核，含 C6） | ✅ ACCEPTED & COMMITTED（`8766223`） |
-| PHASE 3-F（重启持久化验收） | ✅ HARD GATES PASSED（阶段提交审计待完成） |
+| PHASE 3-F（重启持久化验收） | ✅ ACCEPTED & COMMITTED（`5ca8015`） |
 | PHASE 3-G（事件一致性） | ⛔ NOT STARTED / NOT AUTHORIZED |
 
 - 阶段闸门：**3-D / 3-E 已验收并提交；3-F 两个重启 HARD GATE 已通过；3-G 未授权，不得开始。**
@@ -57,7 +57,7 @@ PHASE 3-D 与 PHASE 3-E 已完成并提交：`3dbbdfd` 和 `8766223`。PHASE 3-F
 
 ## 4. 进行中 / 阻塞（由 pi 填写）
 
-- PHASE 3-F 两个 HARD GATE 与项目验证均已通过；阶段提交审计待完成。
+- PHASE 3-F 两个 HARD GATE 与项目验证均已通过并提交（`5ca8015`）。
 - 当前 STOP：PHASE 3-G 未授权，不得开始。
 - 生产 Domain、Repository、TaskService、IPC Contract、Preload API、Renderer/UI、Agent、MCP 均未修改；未新增 migration。
 
@@ -98,7 +98,7 @@ PHASE 3-D 与 PHASE 3-E 已完成并提交：`3dbbdfd` 和 `8766223`。PHASE 3-F
 
 ## 8. 下一步
 
-- 完成 PHASE 3-F 阶段提交与远端同步后停止；PHASE 3-G 未获授权前不得开始。
+- PHASE 3-F 已提交并推送；PHASE 3-G 未获授权前不得开始。
 
 ## 9. 交接引导词（可直接粘贴给 pi）
 
