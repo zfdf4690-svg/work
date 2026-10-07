@@ -66,8 +66,8 @@ export function startApp(): void {
 
       // 2. PHASE 3-B：Migration Runner 接入点（当前阶段不实现，仅保留位置）
 
-      // 3. 注册所有受控 IPC Handlers（当前仍由 InMemoryTaskRepository 支撑，PHASE 3-D 才切换为 SQLite）
-      registerIpcHandlers();
+      // 3. 注册所有受控 IPC Handlers（生产 DI 已切换到 SQLiteTaskRepository）
+      await registerIpcHandlers();
 
       // 4. 创建主窗口
       mainWindow = createMainWindow();

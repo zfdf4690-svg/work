@@ -62,11 +62,8 @@ async function runRepositoryTests(): Promise<void> {
     const created = await repository.create(roundTripInput);
     assert.deepEqual(created, roundTripInput);
     assert.deepEqual(await repository.findById(roundTripInput.id), roundTripInput);
-    assert.equal(
-      connection.prepare('SELECT context_id FROM tasks WHERE id = ?').get(roundTripInput.id)
-        ?.context_id,
-      'ctx-001'
-    );
+    const roundTripRow = connection.prepare('SELECT context_id FROM tasks WHERE id = ?').get(roundTripInput.id) as { context_id?: string | null } | undefined;
+    assert.equal(roundTripRow?.context_id, 'ctx-001');
     assert.equal(await repository.findById('00000000-0000-4000-8000-999999999999'), null);
 
     const nullableTask = createTask({
@@ -84,26 +81,16 @@ async function runRepositoryTests(): Promise<void> {
     assert.equal(nullableCreated.category, undefined);
     assert.deepEqual(nullableCreated.tags, []);
     assert.equal(nullableCreated.contextId, null);
-    assert.equal(
-      connection.prepare('SELECT context_id FROM tasks WHERE id = ?').get(nullableTask.id)
-        ?.context_id,
-      null
-    );
+    const nullableRow = connection.prepare('SELECT context_id FROM tasks WHERE id = ?').get(nullableTask.id) as { context_id?: string | null } | undefined;
+    assert.equal(nullableRow?.context_id, null);
 
     const optionalContextTask = createTask({ contextId: undefined, tags: [] });
     const optionalContextCreated = await repository.create(optionalContextTask);
     assert.equal(optionalContextCreated.contextId, null);
     assert.deepEqual(optionalContextCreated.tags, []);
-    assert.equal(
-      connection.prepare('SELECT context_id, tags_json FROM tasks WHERE id = ?').get(optionalContextTask.id)
-        ?.context_id,
-      null
-    );
-    assert.equal(
-      connection.prepare('SELECT tags_json FROM tasks WHERE id = ?').get(optionalContextTask.id)
-        ?.tags_json,
-      null
-    );
+    const optionalContextRow = connection.prepare('SELECT context_id, tags_json FROM tasks WHERE id = ?').get(optionalContextTask.id) as { context_id?: string | null; tags_json?: string | null } | undefined;
+    assert.equal(optionalContextRow?.context_id, null);
+    assert.equal(optionalContextRow?.tags_json, null);
 
     const emptyStringTask = createTask({
       description: '',

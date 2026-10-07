@@ -22,63 +22,36 @@ import {
   MainAgentResumeConfirmationSchema,
   MainAgentInterruptSchema,
 } from './zodSchemas';
-import { Task, TaskPriority, TaskSource, TaskStatus } from '../../domain';
+import { Task } from '../../domain';
 import {
   ITaskService,
   TaskService,
   ITaskRepository,
-  InMemoryTaskRepository,
   IEventBus,
   DomainEventBus,
 } from '../../core';
-
-function createDefaultSeedTasks(): Task[] {
-  const now = new Date().toISOString();
-  return [
-    {
-      id: 'smoke-electron-task-1',
-      title: 'Electron Runtime & Typed IPC Smoke Verification',
-      description: 'Main Process received IPC request through Preload contextBridge',
-      status: TaskStatus.IN_PROGRESS,
-      priority: TaskPriority.HIGH,
-      dueAt: new Date(Date.now() + 3600000).toISOString(),
-      source: TaskSource.SYSTEM,
-      category: 'Smoke Test',
-      tags: ['electron', 'ipc', 'smoke'],
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: 'task-core-seed-2',
-      title: '建立 App Core 任务服务与领域状态机',
-      description: '实现 TaskService + InMemory/SQLite 仓储标准接入层',
-      status: TaskStatus.PENDING,
-      priority: TaskPriority.MEDIUM,
-      source: TaskSource.MANUAL,
-      category: '架构',
-      tags: ['core', 'service'],
-      createdAt: now,
-      updatedAt: now,
-    },
-  ];
-}
+import { createSqliteTaskRepository } from '../../core/services/taskServiceFactory';
+import { getDatabaseManager } from '../main/database';
 
 // 默认单例仓储与服务实例
 let defaultRepository: ITaskRepository | null = null;
 let defaultService: ITaskService | null = null;
 
-export function registerIpcHandlers(
+export async function registerIpcHandlers(
   customTaskService?: ITaskService,
   customEventBus?: IEventBus
-): void {
+): Promise<ITaskService> {
   const eventBus = customEventBus || DomainEventBus.getInstance();
 
   if (!defaultRepository) {
-    defaultRepository = new InMemoryTaskRepository(createDefaultSeedTasks());
+    defaultRepository = await createSqliteTaskRepository(getDatabaseManager());
   }
 
-  const taskService: ITaskService =
-    customTaskService || defaultService || (defaultService = new TaskService(defaultRepository, eventBus));
+  if (!defaultService) {
+    defaultService = new TaskService(defaultRepository, eventBus);
+  }
+
+  const taskService: ITaskService = customTaskService || defaultService;
 
   // 监听领域事件并跨进程广播至所有活跃 BrowserWindow (Event Bus -> IPC Broadcast)
   eventBus.subscribe('*', (event) => {
@@ -169,5 +142,7 @@ export function registerIpcHandlers(
     }
     return createIpcError(IpcErrorCode.INTERNAL_ERROR, 'AgentRuntime 尚未挂载 (PHASE 8)');
   });
+
+  return taskService;
 }
 

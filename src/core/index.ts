@@ -9,5 +9,6 @@ export * from './repository/inMemoryTaskRepository';
 export * from './repository/drizzleTaskRepository';
 export * from './services/taskService.interface';
 export * from './services/taskService';
+export * from './services/taskServiceFactory';
 export * from './db/schema';
 export * from './db/database.interface';
