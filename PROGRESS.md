@@ -1,22 +1,22 @@
 # 项目进度 · PHASE 3 交接文档
 
-> 最后更新：2026-10-05（PHASE 3-C ✅ ACCEPTED & COMMITTED `05057dc`；3-D 未授权）
+> 最后更新：2026-10-07（PHASE 3-F 两个 Restart HARD GATE 验证通过；阶段提交审计待完成；3-G 未授权）
 > 新会话接手时：**先读本文件，再读 `AGENTS.md` 和 `.pi/skills/backend-task-pipeline/SKILL.md`**
 
 ---
 
 ## 1. 当前阶段
 
-**已完成**：PHASE 3-A0 ✅ ACCEPTED；PHASE 3-A ✅ ACCEPTED & COMMITTED（`4f3fb8e`）；PHASE 3-B ✅ ACCEPTED & COMMITTED（`8b41171`）；PHASE 3-C ✅ ACCEPTED & COMMITTED（`05057dc`）：SQLite Repository、Domain/Drizzle `contextId` 同步及隔离专项测试。
-**当前状态**：⏸ **PHASE 3-D NOT STARTED / NOT AUTHORIZED**，等待人工批准。
-**未开始**：3-D TaskService SQLite DI / 3-E IPC 复核 / 3-F 重启持久化验收 / 3-G 事件一致性。
+**已完成**：PHASE 3-A0 ✅ ACCEPTED；PHASE 3-A ✅ ACCEPTED & COMMITTED（`4f3fb8e`）；PHASE 3-B ✅ ACCEPTED & COMMITTED（`8b41171`）；PHASE 3-C ✅ ACCEPTED & COMMITTED（`05057dc`）；PHASE 3-D ✅ ACCEPTED & COMMITTED（`3dbbdfd`）：TaskService 已切到 SQLite Repository；PHASE 3-E ✅ ACCEPTED & COMMITTED（`8766223`）：IPC/Zod/SQLite 真实链路与验证通过。
+**当前状态**：PHASE 3-F 已获授权，Process A→B 与 Electron A→B Restart HARD GATE 均通过；阶段提交审计待完成。
+**未开始 / 未授权**：PHASE 3-G 事件一致性。
 
 ## 2. 环境与仓库关键事实
 
 - 工作区：`E:\系统默认\桌面\个人办公助手1`（WSL 中为 `/mnt/e/...`）；项目根 = `work/`
 - Electron + React + TypeScript + SQLite + Drizzle ORM + Zod（冻结栈，禁 Python/FastAPI）
 - 依赖已装：`better-sqlite3@13.0.3`、`drizzle-orm@0.45.3`；**未装**：drizzle-kit（禁止）、electron-rebuild（3-A 实证不需要）、electron-builder（需审批）
-- 运行时现状（3-C 后）：SQLite Repository 已可独立完成 CRUD/count；生产 IPC handler 仍注入 `InMemoryTaskRepository`，**应用任务数据仍重启丢失**，3-D 才切换
+- 运行时现状：生产 IPC handler 经 TaskService 工厂装配 SQLite Repository；3-F 两种真实重启路径均已验证数据恢复
 - Schema：Task `contextId?: string | null` ↔ Drizzle `context_id` ↔ 3-B migration 已有 nullable TEXT 列；未新增 migration 或 FK
 - migration：轻量 `MigrationRunner` 已建，tracking 为 `schema_migrations`；dev/packaged 均使用隔离临时 userData 验证
 - 验证全绿：lint/typecheck、smoke:core、smoke:test、Vite build、migration smoke、Repository CRUD/mapping/filter/count/delete/error tests。Vite build 有 >500 KB chunk 提示
@@ -46,9 +46,10 @@
 1. **3-A SQLite Runtime**：✅ 已完成（`4f3fb8e`）。ABI 实证无需 electron-rebuild（Electron 44.4.5 = N-API 10 = better-sqlite3@13）；打包验证以 `resources/app` + exe 重命名仿真完成（electron-builder 仍未装、需审批）
 2. **3-B Migration**：✅ 已完成并提交（`8b41171`）；临时 userData Dev/Packaged 实测 migration 创建、tracking、幂等和安全边界通过
 3. **3-C Repository 加固**：✅ 已完成并提交（`05057dc`）；真实 Drizzle 类型、数据库 COUNT、物理删除结果、筛选语义对齐及 Repository 测试通过
-4. **3-D DI 切换**：handlers.ts 注入 SQLite Repository（先删种子，切换后补持久化种子）
-5. **3-E IPC 复核**：含 C6 事件广播修复
-6. **3-F/3-G**：重启持久化验证 + 事件时序/广播端到端验证
+4. **3-D DI 切换**：✅ 已完成并提交（`3dbbdfd`）；handlers.ts 已装配 SQLite Repository
+5. **3-E IPC 复核**：✅ 已完成并提交（`8766223`）；真实 IPC → Zod → TaskService → SQLite 链路验证通过
+6. **3-F 重启持久化**：Process A→B 与 Electron A→B HARD GATE 均通过；临时 userData/DB 路径一致，migration 重启后非破坏性跳过
+7. **3-G 事件一致性**：未开始 / 未授权
 
 各 PHASE 的详细步骤/验收标准：`.pi/skills/backend-task-pipeline/SKILL.md` + `references/acceptance-checklist.md`
 

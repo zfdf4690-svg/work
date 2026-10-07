@@ -23,6 +23,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const phase3f = process.argv[2] === 'phase3f';
 const mode = process.argv[2] === 'packaged' ? 'packaged' : 'dev';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const electronExe = path.join(root, 'node_modules', 'electron', 'dist', 'electron.exe');
@@ -36,7 +37,7 @@ fs.mkdirSync(userDataDir, { recursive: true });
 
 // 独立端口 + 显式 IPv4：避免与占用 3000 端口的其他 dev server 冲突，
 // 并使 vite 监听栈与 Chromium 对 localhost 的解析偏好（127.0.0.1）一致
-const DEV_PORT = 3123;
+const DEV_PORT = phase3f ? 31000 + Math.floor(Math.random() * 20000) : 3123;
 const DEV_ORIGIN = `http://127.0.0.1:${DEV_PORT}`;
 const EXPECTED_TITLE = 'AI Work Assistant - 个人工作助手';
 
@@ -78,10 +79,10 @@ async function cdpEvaluate(wsUrl, expression, awaitPromise = false) {
   return r?.result;
 }
 
-async function findPageTarget(urlPredicate) {
+async function findPageTarget(urlPredicate, excludedIds = []) {
   return waitFor(async () => {
     const list = await (await fetch('http://127.0.0.1:9222/json/list')).json();
-    return list.find((t) => t.type === 'page' && urlPredicate(t.url)) || null;
+    return list.find((t) => t.type === 'page' && !excludedIds.includes(t.id) && urlPredicate(t.url)) || null;
   }, 30000);
 }
 
@@ -98,7 +99,7 @@ let viteProc = null;
 let electronProc = null;
 
 async function main() {
-  console.log(`=== PHASE 3-B Electron Runtime Verification (${mode}) ===`);
+  console.log(`=== ${phase3f ? 'PHASE 3-F Electron Restart Verification' : `PHASE 3-B Electron Runtime Verification (${mode})`} ===`);
 
   if (!fs.existsSync(electronExe)) {
     check('A0 Electron 二进制存在', false, electronExe);
@@ -106,11 +107,24 @@ async function main() {
   }
   check('A0 Electron 二进制存在', true, electronExe);
 
+  if (phase3f) {
+    const build = spawnSync(process.execPath, [path.join(root, 'scripts', 'build-electron.mjs')], {
+      cwd: root,
+      encoding: 'utf8',
+      windowsHide: true,
+    });
+    if (build.stdout) process.stdout.write(build.stdout);
+    if (build.stderr) process.stderr.write(build.stderr);
+    check('PHASE 3-F 使用当前源码重建 Electron Main/Preload', build.status === 0, `exit=${build.status}`);
+    if (build.status !== 0) throw new Error(`Electron build failed before restart verification: exit=${build.status}`);
+  }
+
   console.log(`[isolation] temporary userData=${userDataDir}`);
 
   let electronArgs;
   let pageUrlPredicate;
   let spawnedExe = electronExe;
+  let electronATargetId = null;
   const electronEnv = {
     ...process.env,
     ELECTRON_ENABLE_LOGGING: '1',
@@ -129,6 +143,7 @@ async function main() {
       return r && r.ok;
     }, 60000);
     check('前置：vite dev server 就绪', !!viteReady, DEV_ORIGIN);
+    if (!viteReady) throw new Error(`Vite did not become ready at ${DEV_ORIGIN}`);
     electronArgs = ['.', '--remote-debugging-port=9222'];
     electronEnv.VITE_DEV_SERVER_URL = DEV_ORIGIN;
     pageUrlPredicate = (url) => url.includes(`127.0.0.1:${DEV_PORT}`);
@@ -211,6 +226,7 @@ async function main() {
 
   // A4/A5/A6：CDP 断言 Renderer 边界
   const page = dbInitLine ? await findPageTarget(pageUrlPredicate) : null;
+  electronATargetId = page?.id || null;
   check('前置：CDP 发现 Renderer 页面', !!page, page?.url || '');
   if (page) {
     // 页面真实性断言：等待导航 commit，确认加载的是目标应用页面而非错误页/其他应用（错误页不执行 preload）
@@ -221,7 +237,8 @@ async function main() {
       const v = r?.result?.value ? JSON.parse(r.result.value) : null;
       return v && v.url !== 'about:blank' && v.ready !== 'loading' ? v : null;
     }, 30000);
-    check('前置：Renderer 页面真实性（目标应用，非错误页）', !!idn && idn.hasRoot === true && (idn.title || '').includes(expectedTitle), JSON.stringify(idn));
+    const rendererIsApp = !!idn && idn.hasRoot === true && (idn.title || '').includes(expectedTitle);
+    check('前置：Renderer 页面真实性（目标应用，非错误页）', rendererIsApp, JSON.stringify(idn));
 
     const boundary = await cdpEvaluate(page.webSocketDebuggerUrl,
       `JSON.stringify({api: typeof window.electronAPI, taskList: typeof window.electronAPI?.task?.list, req: typeof window.require, proc: typeof window.process, glob: typeof window.global})`);
@@ -232,7 +249,56 @@ async function main() {
     const ipc = await cdpEvaluate(page.webSocketDebuggerUrl,
       `window.electronAPI.task.list().then(r => JSON.stringify({success: r.success, count: r.data?.length, firstId: r.data?.[0]?.id})).catch(e => 'ERR:' + e)`, true);
     const i = ipc?.result?.value ? JSON.parse(ipc.result.value) : null;
-    check('A6 Renderer→IPC→Main→TaskService 链路', i?.success === true && i?.count >= 2, JSON.stringify(i));
+    const initialIpcWorks = i?.success === true && (phase3f ? Number.isInteger(i.count) : i.count >= 2);
+    check('A6 Renderer→IPC→Main→TaskService 链路', initialIpcWorks, JSON.stringify(i));
+
+    if (phase3f) {
+      const taskTitle = `PHASE_3_F_ELECTRON_RESTART_${Date.now()}_${process.pid}`;
+      const createInput = {
+        title: taskTitle,
+        description: 'Created through Renderer IPC for Electron restart verification',
+        priority: 'HIGH',
+        dueAt: '2026-12-01T10:00:00.000Z',
+        source: 'AI',
+        category: 'Phase3F',
+        tags: ['AI', 'Work', 'Important'],
+      };
+      const create = await cdpEvaluate(page.webSocketDebuggerUrl,
+        `window.electronAPI.task.create(${JSON.stringify(createInput)}).then(r => JSON.stringify(r))`, true);
+      const createResult = create?.result?.value ? JSON.parse(create.result.value) : null;
+      const created = createResult?.success ? createResult.data : null;
+      check('Electron A 通过 Renderer→Preload→IPC 创建唯一 Task', !!created?.id && created.title === taskTitle, JSON.stringify(created));
+
+      let expectedElectronTask = null;
+      if (created?.id) {
+        const immediateRead = await cdpEvaluate(page.webSocketDebuggerUrl,
+          `window.electronAPI.task.get({id:${JSON.stringify(created.id)}}).then(r => JSON.stringify(r))`, true);
+        const immediateResult = immediateRead?.result?.value ? JSON.parse(immediateRead.result.value) : null;
+        check('Electron A 创建后立即经 IPC 读回', immediateResult?.success === true && immediateResult.data?.id === created.id, JSON.stringify(immediateResult?.data));
+
+        const updateInput = {
+          id: created.id,
+          title: `${taskTitle}_updated`,
+          description: 'Updated through Renderer IPC before Electron exits',
+          status: 'IN_PROGRESS',
+          priority: 'URGENT',
+          tags: ['AI', 'Work', 'Important'],
+        };
+        const update = await cdpEvaluate(page.webSocketDebuggerUrl,
+          `window.electronAPI.task.update(${JSON.stringify(updateInput)}).then(r => JSON.stringify(r))`, true);
+        const updateResult = update?.result?.value ? JSON.parse(update.result.value) : null;
+        check('Electron A 通过 IPC 更新 Task', updateResult?.success === true && updateResult.data?.status === 'IN_PROGRESS', JSON.stringify(updateResult?.data));
+
+        const finalRead = await cdpEvaluate(page.webSocketDebuggerUrl,
+          `window.electronAPI.task.get({id:${JSON.stringify(created.id)}}).then(r => JSON.stringify(r))`, true);
+        const finalResult = finalRead?.result?.value ? JSON.parse(finalRead.result.value) : null;
+        expectedElectronTask = finalResult?.success ? finalResult.data : null;
+        check('Electron A 保存重启前全字段快照', !!expectedElectronTask && expectedElectronTask.title === updateInput.title, JSON.stringify(expectedElectronTask));
+      }
+      globalThis.phase3fTask = expectedElectronTask;
+      globalThis.phase3fRendererIsApp = rendererIsApp;
+      globalThis.phase3fInitialIpcWorks = initialIpcWorks;
+    }
   }
 
   // Runtime migration must create the database only below this invocation's temporary userData.
@@ -240,12 +306,75 @@ async function main() {
   check('A3 SQLite 文件位于临时 userData', dbExists, dbPath);
 
   // A8：优雅退出 → close
+  const electronAProc = electronProc;
   gracefulQuit(electronPid);
-  const exited = await waitFor(() => {
-    try { process.kill(electronPid, 0); return null; } catch { return true; }
-  }, 15000, 500);
+  const exited = await waitFor(() =>
+    electronAProc.exitCode !== null || electronAProc.signalCode !== null ? true : null,
+  15000, 250);
   const outContent = fs.readFileSync(outLog, 'utf8');
-  check('A8 优雅退出且 [Database] closed', !!exited && outContent.includes('[Database] closed'));
+  check('A8 Electron A 退出码为 0 且 [Database] closed', !!exited && electronAProc.exitCode === 0 && outContent.includes('[Database] closed'), `exit=${electronAProc.exitCode}`);
+
+  if (phase3f) {
+    const expectedTask = globalThis.phase3fTask;
+    check('HARD GATE B 前置：Electron A 已捕获 Task 完整快照', !!expectedTask);
+    const electronBOutLog = path.join(logDir, 'electron-phase3f-B.out.log');
+    const electronBErrLog = path.join(logDir, 'electron-phase3f-B.err.log');
+    const electronBOutFd = fs.openSync(electronBOutLog, 'w');
+    const electronBErrFd = fs.openSync(electronBErrLog, 'w');
+    electronProc = spawn(spawnedExe, electronArgs, {
+      cwd: mode === 'packaged' ? simDir : root,
+      env: electronEnv,
+      stdio: ['ignore', electronBOutFd, electronBErrFd],
+    });
+    const electronBPid = electronProc.pid;
+    console.log(`[run] Electron B pid=${electronBPid} mode=${mode}`);
+
+    const electronBDbInit = await waitFor(() => {
+      const content = fs.existsSync(electronBOutLog) ? fs.readFileSync(electronBOutLog, 'utf8') : '';
+      const match = content.match(/\[Database\] initialized: (.+)/);
+      return match ? match[1].trim() : null;
+    }, 60000);
+    const electronBMigration = await waitFor(() => {
+      const content = fs.existsSync(electronBOutLog) ? fs.readFileSync(electronBOutLog, 'utf8') : '';
+      const match = content.match(/\[Database\] migrations applied=(\d+), skipped=(\d+)/);
+      return match ? { applied: Number(match[1]), skipped: Number(match[2]) } : null;
+    }, 60000);
+    check('Electron B 新进程启动并重新初始化 Main/DatabaseManager', !!electronBDbInit, electronBDbInit || '未捕获');
+    check('Electron A/B 使用同一 userData/data.db', electronBDbInit === dbPath, electronBDbInit || '未捕获');
+    check('Electron B migration 非破坏性跳过已执行版本', electronBMigration?.applied === 0 && electronBMigration?.skipped === 1, JSON.stringify(electronBMigration));
+
+    const electronBPage = await findPageTarget(pageUrlPredicate, electronATargetId ? [electronATargetId] : []);
+    check('Electron B Renderer 页面已加载', !!electronBPage, electronBPage?.url || '未捕获');
+    let electronRecoveredTask = null;
+    if (electronBPage && expectedTask) {
+      const preloadReady = await waitFor(async () => {
+        const result = await cdpEvaluate(electronBPage.webSocketDebuggerUrl,
+          `JSON.stringify({api:typeof window.electronAPI,get:typeof window.electronAPI?.task?.get,require:typeof window.require,process:typeof window.process})`);
+        const value = result?.result?.value ? JSON.parse(result.result.value) : null;
+        return value?.api === 'object' && value?.get === 'function' ? value : null;
+      }, 30000, 250);
+      const boundaryResult = preloadReady;
+      check('Electron B Preload/Renderer 安全边界有效', boundaryResult?.api === 'object' && boundaryResult?.get === 'function' && boundaryResult?.require === 'undefined' && boundaryResult?.process === 'undefined', JSON.stringify(boundaryResult));
+
+      if (preloadReady) {
+        const recovered = await cdpEvaluate(electronBPage.webSocketDebuggerUrl,
+          `window.electronAPI.task.get({id:${JSON.stringify(expectedTask.id)}}).then(r => JSON.stringify(r))`, true);
+        const recoveredResult = recovered?.result?.value ? JSON.parse(recovered.result.value) : null;
+        electronRecoveredTask = recoveredResult?.success ? recoveredResult.data : null;
+      }
+      check('Electron B 经 Renderer→Preload→IPC→TaskService 恢复 Task', !!electronRecoveredTask, JSON.stringify(electronRecoveredTask));
+      check('Electron B 全字段与 Electron A 一致', !!electronRecoveredTask && JSON.stringify(electronRecoveredTask) === JSON.stringify(expectedTask), `taskId=${electronRecoveredTask?.id || 'missing'}`);
+    }
+
+    const electronBProc = electronProc;
+    gracefulQuit(electronBPid);
+    const electronBExited = await waitFor(() =>
+      electronBProc.exitCode !== null || electronBProc.signalCode !== null ? true : null,
+    15000, 250);
+    const electronBOutContent = fs.existsSync(electronBOutLog) ? fs.readFileSync(electronBOutLog, 'utf8') : '';
+    check('Electron B 退出码为 0 且 DatabaseManager close', !!electronBExited && electronBProc.exitCode === 0 && electronBOutContent.includes('[Database] closed'), `exit=${electronBProc.exitCode}`);
+    check('HARD GATE B — Electron A → Electron B', !!expectedTask && globalThis.phase3fRendererIsApp === true && globalThis.phase3fInitialIpcWorks === true && !!electronRecoveredTask && JSON.stringify(electronRecoveredTask) === JSON.stringify(expectedTask) && !!electronBDbInit && electronBDbInit === dbPath && electronBMigration?.applied === 0 && electronBMigration?.skipped === 1 && !!electronBExited && electronBProc.exitCode === 0 && electronBOutContent.includes('[Database] closed'));
+  }
 
   const errContent = fs.readFileSync(errLog, 'utf8');
   check('Preload 无加载错误（stderr）', !/Unable to load preload|preload.*failed/i.test(errContent));
@@ -259,10 +388,15 @@ async function main() {
     const jm = db.pragma('journal_mode', { simple: true });
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
     const migrations = db.prepare('SELECT migration_id FROM schema_migrations ORDER BY migration_id').all();
+    const phase3fTask = globalThis.phase3fTask;
+    const phase3fRow = phase3fTask
+      ? db.prepare('SELECT id FROM tasks WHERE id = ?').get(phase3fTask.id)
+      : null;
     db.close();
     check('A9a journal_mode=WAL 持久化生效', String(jm).toLowerCase() === 'wal', `journal_mode=${jm}`);
     check('B2 schema_migrations 与 tasks 存在', JSON.stringify(tables.map((table) => table.name)) === JSON.stringify(['schema_migrations', 'tasks']), JSON.stringify(tables.map((table) => table.name)));
     check('B3 migration version 已登记', JSON.stringify(migrations) === JSON.stringify([{ migration_id: '001_init.sql' }]), JSON.stringify(migrations));
+    if (phase3f) check('Electron Task 确实落在共享 SQLite DB（非 InMemory fallback）', phase3fRow?.id === phase3fTask?.id, phase3fTask?.id || '未捕获');
   }
 
   // 汇总
