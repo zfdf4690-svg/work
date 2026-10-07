@@ -59,7 +59,7 @@ export async function registerIpcHandlers(
       const windows = BrowserWindow.getAllWindows();
       for (const win of windows) {
         if (!win.isDestroyed()) {
-          win.webContents.send(IPC_CHANNELS.EVENT_SUBSCRIBE, event);
+          win.webContents.send(IPC_CHANNELS.EVENT_BROADCAST, { event });
         }
       }
     } catch {

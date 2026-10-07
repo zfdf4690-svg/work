@@ -12,7 +12,7 @@ project trust。请保持精简——只放"违反了会破坏架构"的硬约�
   发现即报告，不得自行拍板。
 - 当前阶段：PHASE 3-A0 至 3-E 已验收并提交（详见 `TASK_PROGRESS.md`）；
   PHASE 3-F 重启持久化验证已获授权，Process A→B 与 Electron A→B 两个 HARD GATE
-  均已通过并提交（`5ca8015`）。PHASE 3-G 事件一致性尚未开始且未授权。
+  均已通过并提交（`5ca8015`）；PHASE 3-G C6 Event Broadcast 已修复并通过真实 Electron E2E。
   详细进度见 `TASK_PROGRESS.md`。
 
 ## 技术栈（已冻结，不要更换）

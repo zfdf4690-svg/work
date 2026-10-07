@@ -1,6 +1,6 @@
 # 项目进度 · PHASE 3 交接文档
 
-> 最后更新：2026-10-07（PHASE 3-F ✅ ACCEPTED & COMMITTED `5ca8015`；3-G 未授权）
+> 最后更新：2026-10-07（PHASE 3-G ✅ ACCEPTED：C6 Event Broadcast 修复及真实 Electron E2E 通过）
 > 新会话接手时：**先读本文件，再读 `AGENTS.md` 和 `.pi/skills/backend-task-pipeline/SKILL.md`**
 
 ---
@@ -9,7 +9,7 @@
 
 **已完成**：PHASE 3-A0 ✅ ACCEPTED；PHASE 3-A ✅ ACCEPTED & COMMITTED（`4f3fb8e`）；PHASE 3-B ✅ ACCEPTED & COMMITTED（`8b41171`）；PHASE 3-C ✅ ACCEPTED & COMMITTED（`05057dc`）；PHASE 3-D ✅ ACCEPTED & COMMITTED（`3dbbdfd`）：TaskService 已切到 SQLite Repository；PHASE 3-E ✅ ACCEPTED & COMMITTED（`8766223`）：IPC/Zod/SQLite 真实链路与验证通过。
 **当前状态**：PHASE 3-F ✅ ACCEPTED & COMMITTED（`5ca8015`）；Process A→B 与 Electron A→B Restart HARD GATE 均通过。
-**未开始 / 未授权**：PHASE 3-G 事件一致性。
+**当前状态**：PHASE 3-G ✅ ACCEPTED：C6 已修复，真实 Electron Renderer → Preload → IPC → TaskService → SQLite → EventBus → IPC Broadcast → Renderer E2E 通过。
 
 ## 2. 环境与仓库关键事实
 
@@ -36,9 +36,9 @@
 
 字段级事实标准：`.pi/skills/backend-task-pipeline/references/task-schema.md`「已冻结基线」表
 
-## 4. 遗留修复项登记（已写入 ipc-contract.md，当前不修）
+## 4. 遗留修复项状态
 
-- **C6 · 事件广播契约不一致** → PHASE 3-E/3-G 修复：`handlers.ts:89` 在 `event:subscribe` 频道发裸 event；契约权威 = `contracts.ts` 的 `EventBroadcastPayload`（`event:broadcast` 频道 + `{ event }` 包装，与 `preload/index.ts:45` 一致）。Renderer 真实模式下收不到事件
+- **C6 · 事件广播契约不一致**：✅ PHASE 3-G 已修复并通过真实 Electron E2E。Main 使用 `event:broadcast` + `{ event }`，与 `contracts.ts` 的 `EventBroadcastPayload` 和 `preload/index.ts` 一致。
 - **C7 · ToolDefinition 字段缺口** → Tool Registry 阶段（不进 PHASE 3）：缺 `outputSchema`/`permissions`，`inputSchema` 不应可选
 
 ## 5. PHASE 3 执行顺序（人工确认后按序推进）
@@ -49,7 +49,7 @@
 4. **3-D DI 切换**：✅ 已完成并提交（`3dbbdfd`）；handlers.ts 已装配 SQLite Repository
 5. **3-E IPC 复核**：✅ 已完成并提交（`8766223`）；真实 IPC → Zod → TaskService → SQLite 链路验证通过
 6. **3-F 重启持久化**：Process A→B 与 Electron A→B HARD GATE 均通过；临时 userData/DB 路径一致，migration 重启后非破坏性跳过
-7. **3-G 事件一致性**：未开始 / 未授权
+7. **3-G 事件一致性**：✅ C6 adapter 已修复；真实 Electron E2E 验证 create/update/complete/delete、失败隔离、持久化后广播与 Task ID 隔离。
 
 各 PHASE 的详细步骤/验收标准：`.pi/skills/backend-task-pipeline/SKILL.md` + `references/acceptance-checklist.md`
 

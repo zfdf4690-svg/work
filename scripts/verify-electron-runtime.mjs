@@ -24,6 +24,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const phase3f = process.argv[2] === 'phase3f';
+const phase3g = process.argv[2] === 'phase3g';
 const mode = process.argv[2] === 'packaged' ? 'packaged' : 'dev';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const electronExe = path.join(root, 'node_modules', 'electron', 'dist', 'electron.exe');
@@ -37,7 +38,7 @@ fs.mkdirSync(userDataDir, { recursive: true });
 
 // 独立端口 + 显式 IPv4：避免与占用 3000 端口的其他 dev server 冲突，
 // 并使 vite 监听栈与 Chromium 对 localhost 的解析偏好（127.0.0.1）一致
-const DEV_PORT = phase3f ? 31000 + Math.floor(Math.random() * 20000) : 3123;
+const DEV_PORT = phase3f || phase3g ? 31000 + Math.floor(Math.random() * 20000) : 3123;
 const DEV_ORIGIN = `http://127.0.0.1:${DEV_PORT}`;
 const EXPECTED_TITLE = 'AI Work Assistant - 个人工作助手';
 
@@ -99,7 +100,7 @@ let viteProc = null;
 let electronProc = null;
 
 async function main() {
-  console.log(`=== ${phase3f ? 'PHASE 3-F Electron Restart Verification' : `PHASE 3-B Electron Runtime Verification (${mode})`} ===`);
+  console.log(`=== ${phase3g ? 'PHASE 3-G Task Event E2E' : phase3f ? 'PHASE 3-F Electron Restart Verification' : `PHASE 3-B Electron Runtime Verification (${mode})`} ===`);
 
   if (!fs.existsSync(electronExe)) {
     check('A0 Electron 二进制存在', false, electronExe);
@@ -107,7 +108,7 @@ async function main() {
   }
   check('A0 Electron 二进制存在', true, electronExe);
 
-  if (phase3f) {
+  if (phase3f || phase3g) {
     const build = spawnSync(process.execPath, [path.join(root, 'scripts', 'build-electron.mjs')], {
       cwd: root,
       encoding: 'utf8',
@@ -115,8 +116,8 @@ async function main() {
     });
     if (build.stdout) process.stdout.write(build.stdout);
     if (build.stderr) process.stderr.write(build.stderr);
-    check('PHASE 3-F 使用当前源码重建 Electron Main/Preload', build.status === 0, `exit=${build.status}`);
-    if (build.status !== 0) throw new Error(`Electron build failed before restart verification: exit=${build.status}`);
+    check(`PHASE 3-${phase3g ? 'G' : 'F'} 使用当前源码重建 Electron Main/Preload`, build.status === 0, `exit=${build.status}`);
+    if (build.status !== 0) throw new Error(`Electron build failed before phase verification: exit=${build.status}`);
   }
 
   console.log(`[isolation] temporary userData=${userDataDir}`);
@@ -249,8 +250,113 @@ async function main() {
     const ipc = await cdpEvaluate(page.webSocketDebuggerUrl,
       `window.electronAPI.task.list().then(r => JSON.stringify({success: r.success, count: r.data?.length, firstId: r.data?.[0]?.id})).catch(e => 'ERR:' + e)`, true);
     const i = ipc?.result?.value ? JSON.parse(ipc.result.value) : null;
-    const initialIpcWorks = i?.success === true && (phase3f ? Number.isInteger(i.count) : i.count >= 2);
+    const initialIpcWorks = i?.success === true && (phase3f || phase3g ? Number.isInteger(i.count) : i.count >= 2);
     check('A6 Renderer→IPC→Main→TaskService 链路', initialIpcWorks, JSON.stringify(i));
+
+    if (phase3g) {
+      const mainSource = fs.readFileSync(path.join(root, 'src', 'electron', 'ipc', 'handlers.ts'), 'utf8');
+      const preloadSource = fs.readFileSync(path.join(root, 'src', 'electron', 'preload', 'index.ts'), 'utf8');
+      check('Main 使用 event:broadcast + { event } 且不向 event:subscribe 广播',
+        /webContents\.send\(IPC_CHANNELS\.EVENT_BROADCAST,\s*\{\s*event\s*\}\)/.test(mainSource)
+          && !/webContents\.send\(IPC_CHANNELS\.EVENT_SUBSCRIBE/.test(mainSource));
+      check('Preload 监听 event:broadcast 并解包 payload.event',
+        /ipcRenderer\.on\(IPC_CHANNELS\.EVENT_BROADCAST, listener\)/.test(preloadSource)
+          && /callback\(payload\.event\)/.test(preloadSource));
+
+      const subscribed = await cdpEvaluate(page.webSocketDebuggerUrl, `(() => {
+        if (!window.electronAPI?.events?.on) return false;
+        window.__phase3gEvents = [];
+        window.__phase3gUnsubs = ['task:created', 'task:updated', 'task:completed', 'task:deleted'].map(type =>
+          window.electronAPI.events.on(type, async event => {
+            const taskId = event.type === 'task:deleted' ? event.payload?.taskId : event.payload?.task?.id;
+            const persisted = taskId ? await window.electronAPI.task.get({ id: taskId }) : null;
+            window.__phase3gEvents.push({ event, persisted });
+          })
+        );
+        return true;
+      })()`);
+      const subscriptionReady = subscribed?.result?.value === true;
+      check('Renderer 通过 window.electronAPI.events.on() 订阅', subscriptionReady);
+
+      const readEvents = async () => {
+        const response = await cdpEvaluate(page.webSocketDebuggerUrl,
+          'JSON.stringify(window.__phase3gEvents || [])');
+        return response?.result?.value ? JSON.parse(response.result.value) : [];
+      };
+      const waitForEvent = async (type, taskId) => waitFor(async () => {
+        const events = await readEvents();
+        return events.find(({ event }) => event?.type === type
+          && (type === 'task:deleted' ? event.payload?.taskId : event.payload?.task?.id) === taskId) || null;
+      }, 8000, 100);
+      const verifyEvent = (name, record, type, taskId, persistedCheck) => {
+        const event = record?.event;
+        const eventTaskId = type === 'task:deleted' ? event?.payload?.taskId : event?.payload?.task?.id;
+        check(`${name}: DomainEvent 结构及类型`, !!event?.id && event.type === type && typeof event.timestamp === 'string' && !!event.payload, JSON.stringify(event));
+        check(`${name}: Task ID 与操作对象一致`, eventTaskId === taskId, `expected=${taskId}, actual=${eventTaskId}`);
+        check(`${name}: 广播时持久化状态符合预期`, !!record && persistedCheck(record.persisted), JSON.stringify(record?.persisted));
+      };
+      const invoke = async (expression) => {
+        const response = await cdpEvaluate(page.webSocketDebuggerUrl, expression, true);
+        return response?.result?.value ? JSON.parse(response.result.value) : null;
+      };
+
+      const taskTitle = `PHASE_3_G_EVENT_${Date.now()}_${process.pid}`;
+      const createdAResult = await invoke(`window.electronAPI.task.create(${JSON.stringify({
+        title: `${taskTitle}_A`, description: 'Event bridge create A', priority: 'HIGH',
+        source: 'MANUAL', category: 'Phase3G', tags: ['event', 'A'],
+      })}).then(r => JSON.stringify(r))`);
+      const taskA = createdAResult?.success ? createdAResult.data : null;
+      check('Task A create 经真实 IPC 成功', !!taskA?.id, JSON.stringify(createdAResult));
+      const createdAEvent = taskA ? await waitForEvent('task:created', taskA.id) : null;
+      verifyEvent('TaskCreated A', createdAEvent, 'task:created', taskA?.id,
+        (result) => result?.success === true && result.data?.id === taskA?.id && result.data?.title === taskA?.title);
+
+      const createdBResult = await invoke(`window.electronAPI.task.create(${JSON.stringify({
+        title: `${taskTitle}_B`, description: 'Event bridge create B', priority: 'LOW',
+        source: 'AI', category: 'Phase3G', tags: ['event', 'B'],
+      })}).then(r => JSON.stringify(r))`);
+      const taskB = createdBResult?.success ? createdBResult.data : null;
+      check('Task B create 经真实 IPC 成功', !!taskB?.id, JSON.stringify(createdBResult));
+      const createdBEvent = taskB ? await waitForEvent('task:created', taskB.id) : null;
+      verifyEvent('TaskCreated B', createdBEvent, 'task:created', taskB?.id,
+        (result) => result?.success === true && result.data?.id === taskB?.id && result.data?.title === taskB?.title);
+
+      const updatedTitle = `${taskTitle}_A_updated`;
+      const updateResult = await invoke(`window.electronAPI.task.update(${JSON.stringify({
+        id: taskA?.id, title: updatedTitle, priority: 'URGENT', tags: ['event', 'updated'],
+      })}).then(r => JSON.stringify(r))`);
+      check('Task A update 经真实 IPC 成功', updateResult?.success === true, JSON.stringify(updateResult));
+      const updatedEvent = taskA ? await waitForEvent('task:updated', taskA.id) : null;
+      verifyEvent('TaskUpdated A', updatedEvent, 'task:updated', taskA?.id,
+        (result) => result?.success === true && result.data?.id === taskA?.id && result.data?.title === updatedTitle && result.data?.priority === 'URGENT');
+
+      const completeResult = await invoke(`window.electronAPI.task.complete({ id: ${JSON.stringify(taskB?.id)} }).then(r => JSON.stringify(r))`);
+      check('Task B complete 经真实 IPC 成功', completeResult?.success === true, JSON.stringify(completeResult));
+      const completedEvent = taskB ? await waitForEvent('task:completed', taskB.id) : null;
+      verifyEvent('TaskCompleted B', completedEvent, 'task:completed', taskB?.id,
+        (result) => result?.success === true && result.data?.id === taskB?.id && result.data?.status === 'COMPLETED' && !!result.data?.completedAt);
+
+      const deleteResult = await invoke(`window.electronAPI.task.delete({ id: ${JSON.stringify(taskA?.id)}, confirmed: true }).then(r => JSON.stringify(r))`);
+      check('Task A delete 经真实 IPC 成功', deleteResult?.success === true, JSON.stringify(deleteResult));
+      const deletedEvent = taskA ? await waitForEvent('task:deleted', taskA.id) : null;
+      verifyEvent('TaskDeleted A', deletedEvent, 'task:deleted', taskA?.id,
+        (result) => result?.success === false);
+
+      const eventCountBeforeFailure = (await readEvents()).length;
+      const failedUpdate = await invoke(`window.electronAPI.task.update({ id: 'phase3g-missing-${process.pid}', title: 'must not publish' }).then(r => JSON.stringify(r))`);
+      check('nonexistent Task update 按预期失败', failedUpdate?.success === false, JSON.stringify(failedUpdate));
+      await sleep(750);
+      const eventsAfterFailure = await readEvents();
+      check('失败操作没有广播 task:updated 成功事件', eventsAfterFailure.length === eventCountBeforeFailure
+        && !eventsAfterFailure.some(({ event }) => event?.type === 'task:updated' && event.payload?.task?.id === `phase3g-missing-${process.pid}`));
+
+      const allObservedEvents = await readEvents();
+      check('Task lifecycle events 无跨 Task 串线', allObservedEvents
+        .filter(({ event }) => event?.type?.startsWith('task:'))
+        .every(({ event }) => [event.type === 'task:deleted' ? event.payload?.taskId : event.payload?.task?.id]
+          .every((id) => id === taskA?.id || id === taskB?.id)));
+      globalThis.phase3gTaskIds = { taskAId: taskA?.id, taskBId: taskB?.id };
+    }
 
     if (phase3f) {
       const taskTitle = `PHASE_3_F_ELECTRON_RESTART_${Date.now()}_${process.pid}`;
@@ -392,11 +498,22 @@ async function main() {
     const phase3fRow = phase3fTask
       ? db.prepare('SELECT id FROM tasks WHERE id = ?').get(phase3fTask.id)
       : null;
+    const phase3gTaskIds = globalThis.phase3gTaskIds;
+    const phase3gTaskA = phase3gTaskIds?.taskAId
+      ? db.prepare('SELECT id FROM tasks WHERE id = ?').get(phase3gTaskIds.taskAId)
+      : null;
+    const phase3gTaskB = phase3gTaskIds?.taskBId
+      ? db.prepare('SELECT id, status FROM tasks WHERE id = ?').get(phase3gTaskIds.taskBId)
+      : null;
     db.close();
     check('A9a journal_mode=WAL 持久化生效', String(jm).toLowerCase() === 'wal', `journal_mode=${jm}`);
     check('B2 schema_migrations 与 tasks 存在', JSON.stringify(tables.map((table) => table.name)) === JSON.stringify(['schema_migrations', 'tasks']), JSON.stringify(tables.map((table) => table.name)));
     check('B3 migration version 已登记', JSON.stringify(migrations) === JSON.stringify([{ migration_id: '001_init.sql' }]), JSON.stringify(migrations));
     if (phase3f) check('Electron Task 确实落在共享 SQLite DB（非 InMemory fallback）', phase3fRow?.id === phase3fTask?.id, phase3fTask?.id || '未捕获');
+    if (phase3g) {
+      check('Task A 删除已持久化至 SQLite', !phase3gTaskA, phase3gTaskIds?.taskAId || '未捕获');
+      check('Task B COMPLETED 状态已持久化至 SQLite', phase3gTaskB?.id === phase3gTaskIds?.taskBId && phase3gTaskB.status === 'COMPLETED', JSON.stringify(phase3gTaskB));
+    }
   }
 
   // 汇总
