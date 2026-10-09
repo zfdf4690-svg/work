@@ -22,13 +22,10 @@ import {
   createIpcSuccess,
   IpcResult,
 } from '../electron/ipc/errorContract';
-import {
-  ITaskService,
-  TaskService,
-  InMemoryTaskRepository,
-  DomainEventBus,
-  IEventBus,
-} from '../core';
+import { ITaskService } from '../core/services/taskService.interface';
+import { TaskService } from '../core/services/taskService';
+import { InMemoryTaskRepository } from '../core/repository/inMemoryTaskRepository';
+import { DomainEventBus, IEventBus } from '../core/events/eventBus';
 
 export class MockIpcClient implements IIpcClient {
   readonly isElectron = false;

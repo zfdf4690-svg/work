@@ -20,7 +20,9 @@ import {
   Sparkles, 
   ShieldCheck, 
   ArrowUpRight,
-  Bot
+  Bot,
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { 
   initialTasks, 
@@ -45,15 +47,70 @@ import { MeetingDetailModal } from './components/MeetingDetailModal';
 import { KnowledgeDetailModal } from './components/KnowledgeDetailModal';
 import { NewTaskModal } from './components/NewTaskModal';
 import { AllTasksModal } from './components/AllTasksModal';
+import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { KnowledgeObsidianView } from './components/KnowledgeObsidianView';
+import { ipcClient, domainTaskToUiTask, createTaskInputFromUi } from './api/ipcClient';
+import { TaskStatus, EventType } from './domain';
 
 export default function App() {
   // Global domain state
-  const [tasks, setTasks] = useState<TaskItem[]>(initialTasks);
+  const isElectron = typeof window !== 'undefined' && !!window.electronAPI?.isElectron;
+  const [tasks, setTasks] = useState<TaskItem[]>(() => {
+    // Electron 环境不再使用 initialTasks；Web 预览（MockIpcClient）可保留示例数据
+    return isElectron ? [] : initialTasks;
+  });
+  const [taskError, setTaskError] = useState<string | null>(null);
+  const [deletingTask, setDeletingTask] = useState<TaskItem | null>(null);
   const [suggestions, setSuggestions] = useState<AISuggestion[]>(initialSuggestions);
   const [knowledge, setKnowledge] = useState<KnowledgeItem[]>(initialKnowledge);
   const [contexts, setContexts] = useState<ContextItem[]>(initialContexts);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
+
+  // 统一从后端拉取任务列表
+  const loadTasks = async () => {
+    try {
+      const res = await ipcClient.task.list();
+      if (res.success) {
+        setTasks(res.data.map(domainTaskToUiTask));
+        setTaskError(null);
+      } else {
+        // Electron 环境下 task.list() 失败时必须显示错误提示，不得静默显示空列表，也不得回退显示 initialTasks
+        const msg = res.error?.message || '未知错误';
+        setTaskError(`加载任务列表失败: ${msg}`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setTaskError(`加载任务出现异常: ${msg}`);
+    }
+  };
+
+  // 挂载时拉取任务并订阅领域事件广播
+  useEffect(() => {
+    loadTasks();
+
+    const eventTypes: EventType[] = [
+      'task:created',
+      'task:updated',
+      'task:completed',
+      'task:deleted',
+    ];
+
+    const unsubs: Array<() => void> = [];
+    eventTypes.forEach(evt => {
+      try {
+        const unsub = ipcClient.events.on(evt, () => {
+          loadTasks();
+        });
+        if (unsub) unsubs.push(unsub);
+      } catch (e) {
+        console.warn(`[App] 监听事件 ${evt} 失败`, e);
+      }
+    });
+
+    return () => {
+      unsubs.forEach(fn => fn());
+    };
+  }, []);
   
   // UI & Viewport state
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
@@ -95,38 +152,98 @@ export default function App() {
   }, []);
 
   // Handlers
-  const handleToggleTask = (taskId: string) => {
-    setTasks(prev => 
-      prev.map(t => (t.id === taskId ? { ...t, completed: !t.completed } : t))
-    );
+  const handleToggleTask = async (taskId: string) => {
+    const currentTask = tasks.find(t => t.id === taskId);
+    if (!currentTask) return;
+
+    try {
+      let res;
+      if (!currentTask.completed) {
+        // 未完成 -> task.complete(id)
+        res = await ipcClient.task.complete(taskId);
+      } else {
+        // 取消完成 -> task.update({ id, status: 'IN_PROGRESS' })
+        // 后端状态机规定 COMPLETED 只能流转回 IN_PROGRESS
+        res = await ipcClient.task.update({ id: taskId, status: TaskStatus.IN_PROGRESS });
+      }
+
+      if (res.success) {
+        const updated = domainTaskToUiTask(res.data);
+        setTasks(prev => prev.map(t => (t.id === taskId ? updated : t)));
+        setTaskError(null);
+      } else {
+        setTaskError(`更新任务状态失败: ${res.error?.message || '状态流转不合法'}`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setTaskError(`操作出现异常: ${msg}`);
+    }
   };
 
-  const handleAddNewTask = (
+  const handleAddNewTask = async (
     title: string, 
     priority: TaskPriority = 'high', 
     dueTime: string = '今天 18:00', 
     category: string = '产品研发'
-  ) => {
-    const newTask: TaskItem = {
-      id: `task-${Date.now()}`,
-      title,
-      completed: false,
-      priority,
-      dueTime,
-      category,
-      isImportant: priority === 'high',
-    };
-    setTasks(prev => [newTask, ...prev]);
+  ): Promise<boolean> => {
+    try {
+      const input = createTaskInputFromUi({ title, priority, dueTime, category });
+      const res = await ipcClient.task.create(input);
+      if (res.success) {
+        const newTask = domainTaskToUiTask(res.data);
+        // 使用后端返回的 Task 更新界面，不自行生成 id
+        setTasks(prev => {
+          const exists = prev.some(t => t.id === newTask.id);
+          return exists ? prev : [newTask, ...prev];
+        });
+        setTaskError(null);
+        return true;
+      } else {
+        setTaskError(`创建任务失败: ${res.error?.message || '参数校验未通过'}`);
+        return false;
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setTaskError(`创建任务出现异常: ${msg}`);
+      return false;
+    }
+  };
+
+  const handleRequestDeleteTask = (taskId: string) => {
+    const target = tasks.find(t => t.id === taskId);
+    if (target) {
+      setDeletingTask(target);
+    }
+  };
+
+  const handleExecuteDeleteTask = async () => {
+    if (!deletingTask) return;
+    const targetId = deletingTask.id;
+    try {
+      // 确认后才调用 task.delete(id, true)；取消时绝不调用
+      const res = await ipcClient.task.delete(targetId, true);
+      if (res.success) {
+        setTasks(prev => prev.filter(t => t.id !== targetId));
+        setDeletingTask(null);
+        setTaskError(null);
+      } else {
+        setTaskError(`删除任务失败: ${res.error?.message || '确认未通过或任务不存在'}`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setTaskError(`删除出现异常: ${msg}`);
+    }
   };
 
   const handleExecuteSuggestion = (suggestion: AISuggestion) => {
     setActiveToolSuggestion(suggestion);
   };
 
-  const handleConfirmAction = (data: ActionConfirmData) => {
+  const handleConfirmAction = async (data: ActionConfirmData) => {
     if (data.actionType === 'create_task') {
       const taskName = data.payload['任务名称'] || data.title;
-      handleAddNewTask(taskName, 'high', '今天 13:45', '日程待办');
+      const ok = await handleAddNewTask(taskName, 'high', '今天 13:45', '日程待办');
+      if (!ok) return; // 失败：不标记已确认，错误提示已经显示
     }
     // Mark in messages
     setChatMessages(prev => 
@@ -525,10 +642,38 @@ export default function App() {
         tasks={tasks}
         onToggleTask={handleToggleTask}
         onAddNewTask={handleAddNewTask}
-        onDeleteTask={(taskId) => {
-          setTasks(prev => prev.filter(t => t.id !== taskId));
-        }}
+        onDeleteTask={handleRequestDeleteTask}
       />
+
+      {/* Task Physical Delete Confirmation Modal */}
+      {deletingTask && (
+        <DeleteConfirmModal
+          isOpen={!!deletingTask}
+          title="删除任务确认"
+          itemName={deletingTask.title}
+          warningText="此操作将从数据库中物理永久删除该任务，不可撤销。"
+          onClose={() => setDeletingTask(null)}
+          onConfirm={handleExecuteDeleteTask}
+        />
+      )}
+
+      {/* Top Error Notification Toast Banner */}
+      {taskError && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] max-w-lg w-[90%] bg-[#2a1215] border border-[#f87171]/40 text-[#fca5a5] px-4 py-3 rounded-xl shadow-2xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center gap-2.5 text-xs md:text-sm font-medium">
+            <AlertCircle className="w-4 h-4 text-[#f87171] shrink-0" />
+            <span>{taskError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setTaskError(null)}
+            className="p-1 rounded hover:bg-white/10 text-[#fca5a5] hover:text-white transition-colors cursor-pointer"
+            title="关闭提示"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

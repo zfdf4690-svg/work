@@ -22,3 +22,4 @@ export const ipcClient: IIpcClient = createIpcClient();
 export * from './ipcClient.interface';
 export * from './electronIpcClient';
 export * from './mockIpcClient';
+export * from './taskAdapter';
