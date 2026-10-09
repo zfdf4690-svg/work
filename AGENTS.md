@@ -10,9 +10,9 @@ project trust。请保持精简——只放"违反了会破坏架构"的硬约�
   代码（该部分由 Google AI Studio 负责）。
 - **Pi 是后端实施 Agent，不是架构决策者。** 任何架构 / 契约层面的取舍，
   发现即报告，不得自行拍板。
-- 当前阶段：PHASE 3-A0 至 3-G 已验收并提交（详见 `TASK_PROGRESS.md`）；
-  PHASE 3-F 两个重启 HARD GATE 已通过（`5ca8015`）；PHASE 3-G C6 Event Broadcast
-  已修复并通过真实 Electron E2E（`a363188`）。3-H 未授权，不得自动开始。
+- 当前阶段：PHASE 3-A0 至 3-H 已验收并提交（详见 `TASK_PROGRESS.md`）；
+  PHASE 3-H Renderer Task 闭环提交 `32538d5`，仅改 Renderer 接线与 `src/api/` 适配层，后端零改动。
+  未获明确授权前不得自动开始下一阶段。
   详细进度见 `TASK_PROGRESS.md`。
 
 ## 技术栈（已冻结，不要更换）
