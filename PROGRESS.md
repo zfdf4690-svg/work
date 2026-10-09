@@ -1,22 +1,21 @@
 # 项目进度 · PHASE 3 交接文档
 
-> 最后更新：2026-10-07（PHASE 3-G ✅ ACCEPTED & COMMITTED `a363188`）
+> 最后更新：2026-10-09（PHASE 3-H ✅ ACCEPTED & COMMITTED `32538d5`）
 > 新会话接手时：**先读本文件，再读 `AGENTS.md` 和 `.pi/skills/backend-task-pipeline/SKILL.md`**
 
 ---
 
 ## 1. 当前阶段
 
-**已完成**：PHASE 3-A0 ✅ ACCEPTED；PHASE 3-A ✅ ACCEPTED & COMMITTED（`4f3fb8e`）；PHASE 3-B ✅ ACCEPTED & COMMITTED（`8b41171`）；PHASE 3-C ✅ ACCEPTED & COMMITTED（`05057dc`）；PHASE 3-D ✅ ACCEPTED & COMMITTED（`3dbbdfd`）：TaskService 已切到 SQLite Repository；PHASE 3-E ✅ ACCEPTED & COMMITTED（`8766223`）：IPC/Zod/SQLite 真实链路与验证通过。
-**当前状态**：PHASE 3-F ✅ ACCEPTED & COMMITTED（`5ca8015`）；Process A→B 与 Electron A→B Restart HARD GATE 均通过。
-**当前状态**：PHASE 3-G ✅ ACCEPTED & COMMITTED（`a363188`）：C6 已修复，真实 Electron Renderer → Preload → IPC → TaskService → SQLite → EventBus → IPC Broadcast → Renderer E2E 通过。
+**已完成**：PHASE 3-A0 ✅ ACCEPTED；PHASE 3-A ✅ ACCEPTED & COMMITTED（`4f3fb8e`）；PHASE 3-B ✅ ACCEPTED & COMMITTED（`8b41171`）；PHASE 3-C ✅ ACCEPTED & COMMITTED（`05057dc`）；PHASE 3-D ✅ ACCEPTED & COMMITTED（`3dbbdfd`）：TaskService 已切到 SQLite Repository；PHASE 3-E ✅ ACCEPTED & COMMITTED（`8766223`）；PHASE 3-F ✅ ACCEPTED & COMMITTED（`5ca8015`）；PHASE 3-G ✅ ACCEPTED & COMMITTED（`a363188`）。
+**当前状态**：PHASE 3-H ✅ ACCEPTED & COMMITTED（`32538d5`）：Renderer Task 闭环通过 `src/api/` 适配层接入 IPC，后端零改动；真实 Electron 验收通过。
 
 ## 2. 环境与仓库关键事实
 
 - 工作区：`E:\系统默认\桌面\个人办公助手1`（WSL 中为 `/mnt/e/...`）；项目根 = `work/`
 - Electron + React + TypeScript + SQLite + Drizzle ORM + Zod（冻结栈，禁 Python/FastAPI）
 - 依赖已装：`better-sqlite3@13.0.3`、`drizzle-orm@0.45.3`；**未装**：drizzle-kit（禁止）、electron-rebuild（3-A 实证不需要）、electron-builder（需审批）
-- 运行时现状：生产 IPC handler 经 TaskService 工厂装配 SQLite Repository；3-F 两种真实重启路径均已验证数据恢复
+- 运行时现状：生产 IPC handler 经 TaskService 工厂装配 SQLite Repository；3-H 后 Renderer Task 操作经适配层接入 IPC，真实 Electron 重启持久化已验收
 - Schema：Task `contextId?: string | null` ↔ Drizzle `context_id` ↔ 3-B migration 已有 nullable TEXT 列；未新增 migration 或 FK
 - migration：轻量 `MigrationRunner` 已建，tracking 为 `schema_migrations`；dev/packaged 均使用隔离临时 userData 验证
 - 验证全绿：lint/typecheck、smoke:core、smoke:test、Vite build、migration smoke、Repository CRUD/mapping/filter/count/delete/error tests。Vite build 有 >500 KB chunk 提示
@@ -50,6 +49,7 @@
 5. **3-E IPC 复核**：✅ 已完成并提交（`8766223`）；真实 IPC → Zod → TaskService → SQLite 链路验证通过
 6. **3-F 重启持久化**：Process A→B 与 Electron A→B HARD GATE 均通过；临时 userData/DB 路径一致，migration 重启后非破坏性跳过
 7. **3-G 事件一致性**：✅ C6 adapter 已修复；真实 Electron E2E 验证 create/update/complete/delete、失败隔离、持久化后广播与 Task ID 隔离。
+8. **3-H Renderer Task 闭环**：✅ 已提交（`32538d5`）；只修改 `App.tsx` 与 `src/api/` 适配/调用层，后端零改动。真实 Electron 中新建并重启持久化、事件自动刷新、完成/取消完成、删除确认均通过。
 
 各 PHASE 的详细步骤/验收标准：`.pi/skills/backend-task-pipeline/SKILL.md` + `references/acceptance-checklist.md`
 
@@ -59,7 +59,7 @@
 - **打包链路**：✅ 已修复——esbuild 构建（main ESM + preload CJS，`scripts/build-electron.mjs`），`package.json` `main` 字段 + `electron:dev` 走产物；loadFile 路径已修（`../../dist/index.html`）；electron-builder 安装包链路未验证（未安装，需审批）
 - **死代码**：`src/electron/preload/preload.ts` 全仓库无引用（建议后续删除）
 - **层级反向依赖**：`taskService.ts:28-32` 引用 `src/electron/ipc/errorContract`（Core→Electron），后续待决策是否移至共享层
-- **Renderer 未接 IPC**：`App.tsx` 任务增删改全是本地 state（:53/:99/:105/:540），属前端负责方后续收敛，本侧不动
+- **3-H 约束与遗留**：取消完成后后端状态为 `IN_PROGRESS`（非 `PENDING`）；UI `normal` 优先级映射为 `MEDIUM`。低风险遗留：并发事件触发的刷新可能乱序；AI 创建任务参数仍为原型写死值。
 - **架构红线不变**：TaskService 唯一业务入口 / Repository 纯持久化 / Renderer 不碰 Node 与 SQLite / 两套状态机分离 / 先落库再发事件
 
 ## 7. 文档索引
