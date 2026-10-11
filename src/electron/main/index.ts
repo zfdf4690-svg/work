@@ -3,7 +3,7 @@
  * 负责主进程生命周期、BrowserWindow 安全实例化以及 IPC 处理器注册
  */
 
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, shell } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getSecureWebPreferences, applyWindowSecurityPolicies } from './security';
@@ -37,7 +37,11 @@ export function createMainWindow(): BrowserWindow {
   });
 
   // 应用生产级安全拦截策略 (拦截未受信外部跳转与非受控弹窗)
-  applyWindowSecurityPolicies(win);
+  applyWindowSecurityPolicies(win, (url) => {
+    void shell.openExternal(url).catch((error: unknown) => {
+      console.warn(`[Security] Failed to open external URL: ${url}`, error);
+    });
+  });
 
   // 加载页面
   const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:3000';
