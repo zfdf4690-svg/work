@@ -17,12 +17,12 @@ export enum ToolRiskLevel {
   HIGH = 'HIGH',
 }
 
-export type ToolSource = 'assistant' | 'floating_ball' | 'dashboard' | 'system';
+export type ToolInvocationSource = 'assistant' | 'floating_ball' | 'dashboard' | 'system';
 
 export interface ToolExecutionContext {
   runId: string;
   conversationId: string;
-  source: ToolSource;
+  source: ToolInvocationSource;
   permissions: string[];
   metadata?: Record<string, unknown>;
 }
