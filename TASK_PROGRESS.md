@@ -2,7 +2,7 @@
 
 > 用途：pi 会话之间的任务交接文档。换会话 / 压缩前由 pi 更新本文件；新会话开头用 `@TASK_PROGRESS.md` 引用即可无缝接上。
 > 约定：标注「由 pi 填写」的章节由 pi 在会话中据实更新，不要留空提交。
-> 最后更新：2026-10-09（PHASE 3-H ✅ ACCEPTED & COMMITTED `32538d5`）
+> 最后更新：2026-10-11（PHASE 3-H 后独立 UI 与 Electron 安全补丁已同步记录）
 
 ---
 
@@ -10,7 +10,7 @@
 
 > 用 2–3 句说清：现在做到哪、卡在哪、下一步是什么。
 
-PHASE 3-D 至 PHASE 3-G 已验收并提交（`3dbbdfd`、`8766223`、`5ca8015`、`a363188`）。PHASE 3-H 已验收并提交（`32538d5`）：Renderer Task 闭环通过 `src/api/` adapter 接入既有 IPC，后端零改动；真实 Electron 验收通过。下一阶段未授权，不得自动开始。
+PHASE 3-D 至 PHASE 3-G 已验收并提交（`3dbbdfd`、`8766223`、`5ca8015`、`a363188`）。PHASE 3-H 已验收并提交（`32538d5`）：Renderer Task 闭环通过 `src/api/` adapter 接入既有 IPC，后端零改动；真实 Electron 验收通过。其后首页工作台仪表盘第一期由 AI Studio 完成（`19ab74d`），仅前端 Renderer 改动；package-lock.json 误删事故由 `3c18463` 恢复；Electron 外链及导航白名单独立补丁已完成。下一阶段未授权，不得自动开始。
 
 ## 1. 项目角色与当前阶段
 
@@ -116,3 +116,12 @@ PHASE 3-D 至 PHASE 3-G 已验收并提交（`3dbbdfd`、`8766223`、`5ca8015`�
 ```
 继续 AI Work Assistant 后端任务。先读 @AGENTS.md、@TASK_PROGRESS.md 和 `.pi/skills/backend-task-pipeline/SKILL.md`。PHASE 3-D 至 3-H 已验收并提交（3-H：`32538d5`）。3-H 只接入 Task Renderer→IPC→后端闭环，后端零改动；已知约束及自动化测试覆盖边界见本文件。当前停止，未经明确授权不得开始下一阶段。
 ```
+
+## 10. PHASE 3-H 后独立 UI 与 Electron 安全补丁
+
+- **首页（工作台）仪表盘第一期**：由 AI Studio 完成，提交 `19ab74d`；仅改 Renderer 的 `DashboardView`、`types`、`taskAdapter` 及其测试、`App` 接线，后端、IPC、数据库零改动。`TaskItem` 新增可选字段 `status`、`dueAt`、`createdAt`、`updatedAt`、`completedAt`。
+- **仪表盘界面决定**：状态筛选仅「全部 / 待开始 / 进行中 / 已完成」，不设逾期；知识动态不放首页；天气使用占位组件 `WeatherBadge`，真实天气后续接入；保留「今日日程」会议卡片，两种运行环境都显示并用于跳转浏览器入会。
+- **锁文件事故**：提交 `19ab74d` 误删 `package-lock.json`，已由 `3c18463` 恢复。锁文件当前存在，但所有 `resolved` 地址指向 `registry.npmmirror.com`；无法访问该镜像时 `npm ci` 会失败。
+- **外链默认浏览器补丁**：`setWindowOpenHandler` 仅把 `http:` / `https:` URL 交给 `openExternal`，其他协议拒绝；Electron 窗口始终返回 `deny`。`security.ts` 不导入 `electron`，由 `main/index.ts` 注入回调。真实 Electron 验证使用 spy 验证回调；用户已手动确认系统默认浏览器能够拉起。
+- **`will-navigate` 白名单修复**：先用 `URL` 解析，仅放行 `file:` 与 `localhost` 开发服务器端口（默认 `3000`），移除 `app://` 放行。
+- **遗留与后续**：`file:` 导航当前整体放行；未设置 `VITE_DEV_SERVER_URL` 时默认放行 `localhost:3000`。仪表盘第二期待办为主题系统与 Apple 简约风；第三期为真实天气与定位。

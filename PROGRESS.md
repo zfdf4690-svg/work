@@ -1,6 +1,6 @@
 # 项目进度 · PHASE 3 交接文档
 
-> 最后更新：2026-10-09（PHASE 3-H ✅ ACCEPTED & COMMITTED `32538d5`）
+> 最后更新：2026-10-11（PHASE 3-H 后独立 UI 与 Electron 安全补丁已同步记录）
 > 新会话接手时：**先读本文件，再读 `AGENTS.md` 和 `.pi/skills/backend-task-pipeline/SKILL.md`**
 
 ---
@@ -8,7 +8,7 @@
 ## 1. 当前阶段
 
 **已完成**：PHASE 3-A0 ✅ ACCEPTED；PHASE 3-A ✅ ACCEPTED & COMMITTED（`4f3fb8e`）；PHASE 3-B ✅ ACCEPTED & COMMITTED（`8b41171`）；PHASE 3-C ✅ ACCEPTED & COMMITTED（`05057dc`）；PHASE 3-D ✅ ACCEPTED & COMMITTED（`3dbbdfd`）：TaskService 已切到 SQLite Repository；PHASE 3-E ✅ ACCEPTED & COMMITTED（`8766223`）；PHASE 3-F ✅ ACCEPTED & COMMITTED（`5ca8015`）；PHASE 3-G ✅ ACCEPTED & COMMITTED（`a363188`）。
-**当前状态**：PHASE 3-H ✅ ACCEPTED & COMMITTED（`32538d5`）：Renderer Task 闭环通过 `src/api/` 适配层接入 IPC，后端零改动；真实 Electron 验收通过。
+**当前状态**：PHASE 3-H ✅ ACCEPTED & COMMITTED（`32538d5`）：Renderer Task 闭环通过 `src/api/` 适配层接入 IPC，后端零改动；真实 Electron 验收通过。PHASE 3-H 后，首页工作台仪表盘第一期由 AI Studio 完成（`19ab74d`），仅前端 Renderer 改动；Electron 外链与 `will-navigate` 白名单独立补丁已完成。未获明确授权前不得开始下一阶段。
 
 ## 2. 环境与仓库关键事实
 
@@ -21,6 +21,7 @@
 - 验证全绿：lint/typecheck、smoke:core、smoke:test、Vite build、migration smoke、Repository CRUD/mapping/filter/count/delete/error tests。Vite build 有 >500 KB chunk 提示
 - Electron 44.4.5 二进制已补齐（npm postinstall 曾未下载 dist/，手动下载 + SHA256 校验）
 - git：3-C 实现 commit `05057dc`；历史换行符 churn 仍在；`.pi/` 未跟踪且未纳入阶段提交；`.env*` 已被 .gitignore 忽略
+- 锁文件事故：仪表盘提交 `19ab74d` 中误删 `package-lock.json`，已由 `3c18463` 恢复。锁文件当前存在，但所有 `resolved` 地址指向 `registry.npmmirror.com`；无法访问该镜像时 `npm ci` 会失败。
 - 一键启动：`start-app.cmd`（双击：构建→vite@3123→Electron；关窗自动清理）
 
 ## 3. 已冻结裁决（C1~C5）—— 不得推翻，变更须走 AGENTS.md 规则 9
@@ -67,3 +68,11 @@
 - 根规则：`work/AGENTS.md`
 - 技能入口：`.pi/skills/backend-task-pipeline/SKILL.md`
 - 基线/契约：`references/` 下 architecture-baseline.md、task-schema.md、ipc-contract.md、acceptance-checklist.md（均已含 2026-09-27 裁决记录）
+
+## 8. PHASE 3-H 后独立 UI 与 Electron 安全补丁
+
+- **首页（工作台）仪表盘第一期**：由 AI Studio 完成，提交 `19ab74d`；仅改 Renderer 的 `DashboardView`、`types`、`taskAdapter` 及其测试、`App` 接线，后端、IPC、数据库零改动。`TaskItem` 新增可选字段 `status`、`dueAt`、`createdAt`、`updatedAt`、`completedAt`。
+- **仪表盘界面决定**：状态筛选仅「全部 / 待开始 / 进行中 / 已完成」，不设逾期；知识动态不放首页；天气使用占位组件 `WeatherBadge`，真实天气后续接入；保留「今日日程」会议卡片，两种运行环境都显示并用于跳转浏览器入会。
+- **外链默认浏览器补丁**：`setWindowOpenHandler` 仅把 `http:` / `https:` URL 交给 `openExternal`，其他协议拒绝；Electron 窗口始终返回 `deny`。`security.ts` 不导入 `electron`，由 `main/index.ts` 注入回调。真实 Electron 验证使用 spy 验证回调；用户已手动确认系统默认浏览器能够拉起。
+- **`will-navigate` 白名单修复**：先用 `URL` 解析，仅放行 `file:` 与 `localhost` 开发服务器端口（默认 `3000`），移除 `app://` 放行。
+- **遗留与后续**：`file:` 导航当前整体放行；未设置 `VITE_DEV_SERVER_URL` 时默认放行 `localhost:3000`。仪表盘第二期待办为主题系统与 Apple 简约风；第三期为真实天气与定位。
