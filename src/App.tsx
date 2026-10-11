@@ -59,6 +59,7 @@ export default function App() {
     // Electron 环境不再使用 initialTasks；Web 预览（MockIpcClient）可保留示例数据
     return isElectron ? [] : initialTasks;
   });
+  const [tasksLoaded, setTasksLoaded] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
   const [deletingTask, setDeletingTask] = useState<TaskItem | null>(null);
   const [suggestions, setSuggestions] = useState<AISuggestion[]>(initialSuggestions);
@@ -81,6 +82,8 @@ export default function App() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setTaskError(`加载任务出现异常: ${msg}`);
+    } finally {
+      setTasksLoaded(true);
     }
   };
 
@@ -430,14 +433,14 @@ export default function App() {
                 <DashboardView
                   tasks={tasks}
                   suggestions={suggestions}
-                  knowledge={knowledge}
+                  tasksLoaded={tasksLoaded}
                   meeting={todayMeeting}
                   onToggleTask={handleToggleTask}
-                  onAddNewTask={handleAddNewTask}
+                  onAddNewTask={(title, priority) => handleAddNewTask(title, priority, '')}
+                  onDeleteTask={handleRequestDeleteTask}
                   onExecuteSuggestion={handleExecuteSuggestion}
                   onNavigateToAI={() => setActiveTab('ai-assistant')}
                   onOpenMeetingModal={() => setIsMeetingModalOpen(true)}
-                  onOpenKnowledgeDetail={(item) => setActiveKnowledgeDetail(item)}
                   onOpenAllTasksModal={() => setIsAllTasksModalOpen(true)}
                 />
               )}

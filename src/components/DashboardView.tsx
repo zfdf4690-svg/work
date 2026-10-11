@@ -1,560 +1,733 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   TaskItem, 
   AISuggestion, 
-  KnowledgeItem, 
   MeetingInfo 
 } from '../types';
+import { TaskStatus } from '../domain';
 import { 
-  Sun, 
+  CloudSun, 
   CheckCircle2, 
   Circle, 
-  Clock, 
-  Video, 
-  ExternalLink, 
-  Flame, 
-  Sparkles, 
-  Bot, 
-  ChevronRight, 
+  Trash2, 
   Plus, 
-  Command, 
+  Sparkles, 
+  MessageSquare, 
   ArrowRight, 
-  BookOpen, 
-  Compass, 
-  Cpu, 
-  Calendar,
-  Check,
-  Radio,
-  ListTodo,
-  ChevronDown
+  ExternalLink,
+  ChevronRight,
+  Clock,
+  Video
 } from 'lucide-react';
 
 interface DashboardViewProps {
   tasks: TaskItem[];
   suggestions: AISuggestion[];
-  knowledge: KnowledgeItem[];
-  meeting: MeetingInfo;
+  tasksLoaded: boolean;
+  meeting: MeetingInfo | null;
   onToggleTask: (taskId: string) => void;
-  onAddNewTask: (title: string, priority: 'high' | 'medium' | 'low' | 'normal') => void;
+  onAddNewTask: (title: string, priority: 'high' | 'medium' | 'low' | 'normal') => Promise<boolean>;
+  onDeleteTask: (taskId: string) => void;
   onExecuteSuggestion: (suggestion: AISuggestion) => void;
   onNavigateToAI: () => void;
   onOpenMeetingModal: () => void;
-  onOpenKnowledgeDetail: (item: KnowledgeItem) => void;
   onOpenAllTasksModal?: () => void;
 }
+
+type FilterTab = 'all' | 'pending' | 'in_progress' | 'completed';
+
+/**
+ * 4.1 天气区独立占位胶囊
+ * 后续只替换此组件即可接入真实天气，不影响任务区
+ */
+export const WeatherBadge: React.FC = () => {
+  return (
+    <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full acrylic-pill text-xs text-[#c7c9dc] select-none">
+      <CloudSun className="w-4 h-4 text-[#7bd0ff] shrink-0" />
+      <span>天气暂未接入</span>
+    </div>
+  );
+};
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   tasks,
   suggestions,
-  knowledge,
+  tasksLoaded,
   meeting,
   onToggleTask,
   onAddNewTask,
+  onDeleteTask,
   onExecuteSuggestion,
   onNavigateToAI,
   onOpenMeetingModal,
-  onOpenKnowledgeDetail,
   onOpenAllTasksModal,
 }) => {
+  const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [isAddingInline, setIsAddingInline] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [filterPriority, setFilterPriority] = useState<string | null>(null);
-  const [isCardExpanded, setIsCardExpanded] = useState(false);
+  const [newPriority, setNewPriority] = useState<'high' | 'medium' | 'low'>('medium');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const inlineInputRef = useRef<HTMLInputElement>(null);
 
-  const completedCount = tasks.filter(t => t.completed).length;
-  const totalCount = tasks.length;
-  const pendingCount = totalCount - completedCount;
-  const completionPercentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  // 展开行内表单时自动聚焦
+  useEffect(() => {
+    if (isAddingInline) {
+      inlineInputRef.current?.focus();
+    }
+  }, [isAddingInline]);
 
-  const highPriorityPending = tasks.filter(t => !t.completed && t.priority === 'high').length;
-  const normalPriorityPending = tasks.filter(t => !t.completed && (t.priority === 'normal' || t.priority === 'medium' || t.priority === 'low')).length;
-
-  const displayTasks = filterPriority 
-    ? tasks.filter(t => t.priority === filterPriority)
-    : tasks;
-
-  const handleCreateTask = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
-    onAddNewTask(newTitle.trim(), 'high');
-    setNewTitle('');
-    setIsAddingInline(false);
+  // 4.1 动态问候语（按本地小时，不显示用户姓名）
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour >= 0 && hour <= 4) return '夜深了，注意休息';
+    if (hour >= 5 && hour <= 10) return '早上好，今天也加油！';
+    if (hour >= 11 && hour <= 13) return '中午好，记得休息';
+    if (hour >= 14 && hour <= 17) return '下午好，继续加油！';
+    return '晚上好，辛苦了';
   };
 
-  const getPriorityBadge = (priority: TaskItem['priority']) => {
-    switch (priority) {
-      case 'high':
-        return (
-          <span className="px-2 py-0.5 rounded-md bg-[#F87171]/15 border border-[#F87171]/25 text-[#F87171] font-mono text-[10px]">
-            高优先级
-          </span>
-        );
-      case 'medium':
-        return (
-          <span className="px-2 py-0.5 rounded-md bg-[#FBBF24]/15 border border-[#FBBF24]/25 text-[#FBBF24] font-mono text-[10px]">
-            中优先级
-          </span>
-        );
-      case 'low':
-        return (
-          <span className="px-2 py-0.5 rounded-md bg-[#7bd0ff]/15 border border-[#7bd0ff]/25 text-[#7bd0ff] font-mono text-[10px]">
-            低优先级
-          </span>
-        );
-      default:
-        return (
-          <span className="px-2 py-0.5 rounded-md bg-white/10 border border-white/10 text-[#908fa0] font-mono text-[10px]">
-            普通
-          </span>
-        );
+  // 4.1 动态格式化本地日期（不写死）
+  const formattedDate = new Date().toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long',
+  });
+
+  // 通用口径状态提取
+  const statusOf = (t: TaskItem): TaskStatus => {
+    if (t.status) return t.status;
+    return t.completed ? TaskStatus.COMPLETED : TaskStatus.PENDING;
+  };
+
+  // 可见任务 = 所有 statusOf !== CANCELLED 的任务（已取消不进入方块、列表、总计）
+  const visibleTasks = tasks.filter(t => statusOf(t) !== TaskStatus.CANCELLED);
+
+  // 4.2 今日任务概览四个方块统计
+  const pendingCount = visibleTasks.filter(t => statusOf(t) === TaskStatus.PENDING).length;
+  const inProgressCount = visibleTasks.filter(t => statusOf(t) === TaskStatus.IN_PROGRESS).length;
+  const completedCount = visibleTasks.filter(t => statusOf(t) === TaskStatus.COMPLETED).length;
+  const totalCount = pendingCount + inProgressCount + completedCount;
+
+  // 4.3 标签页过滤与排序
+  const filteredTasks = visibleTasks.filter(t => {
+    if (activeTab === 'all') return true;
+    if (activeTab === 'pending') return statusOf(t) === TaskStatus.PENDING;
+    if (activeTab === 'in_progress') return statusOf(t) === TaskStatus.IN_PROGRESS;
+    if (activeTab === 'completed') return statusOf(t) === TaskStatus.COMPLETED;
+    return true;
+  });
+
+  // 排序：未完成在前、已完成在后；同组内按 dueAt 升序，无 dueAt 的排最后
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    const aDone = statusOf(a) === TaskStatus.COMPLETED;
+    const bDone = statusOf(b) === TaskStatus.COMPLETED;
+    if (aDone !== bDone) {
+      return aDone ? 1 : -1;
+    }
+    if (a.dueAt && b.dueAt) {
+      return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime();
+    }
+    if (a.dueAt && !b.dueAt) return -1;
+    if (!a.dueAt && b.dueAt) return 1;
+    return 0;
+  });
+
+  const displayedTasks = sortedTasks.slice(0, 8);
+  const overflowCount = sortedTasks.length - 8;
+
+  // 4.4 行内表单提交
+  const handleInlineSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = newTitle.trim();
+    if (!trimmed || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      const ok = await onAddNewTask(trimmed, newPriority);
+      if (ok) {
+        setNewTitle('');
+        setNewPriority('medium');
+        setIsAddingInline(false);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  // 4.6 右侧最近动态（仅从 tasks 推导，不虚构）
+  const formatRelativeTime = (isoString: string): string => {
+    try {
+      const diffMs = Date.now() - new Date(isoString).getTime();
+      const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+      if (diffSec < 60) return '刚刚';
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin} 分钟前`;
+      const diffHour = Math.floor(diffMin / 60);
+      if (diffHour < 24) return `${diffHour} 小时前`;
+      const d = new Date(isoString);
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${mm}-${dd}`;
+    } catch {
+      return '刚刚';
+    }
+  };
+
+  const activities = visibleTasks
+    .filter(t => t.updatedAt || t.completedAt)
+    .map(t => {
+      const timeIso = t.completedAt ?? t.updatedAt!;
+      const isDone = statusOf(t) === TaskStatus.COMPLETED || t.completed;
+      let text = `你更新了任务：${t.title}`;
+      if (isDone) {
+        text = `你完成了任务：${t.title}`;
+      } else if (t.createdAt && t.updatedAt && t.createdAt === t.updatedAt) {
+        text = `你创建了任务：${t.title}`;
+      }
+      return {
+        id: t.id,
+        text,
+        timeIso,
+      };
+    })
+    .sort((a, b) => new Date(b.timeIso).getTime() - new Date(a.timeIso).getTime())
+    .slice(0, 5);
+
+  const getPriorityBadge = (priority: TaskItem['priority']) => {
+    if (priority === 'high') {
+      return (
+        <span className="px-2 py-0.5 rounded-md bg-[#F87171]/15 border border-[#F87171]/25 text-[#F87171] font-mono text-[11px] shrink-0">
+          高
+        </span>
+      );
+    }
+    if (priority === 'low') {
+      return (
+        <span className="px-2 py-0.5 rounded-md bg-[#7bd0ff]/15 border border-[#7bd0ff]/25 text-[#7bd0ff] font-mono text-[11px] shrink-0">
+          低
+        </span>
+      );
+    }
+    // medium / normal 均显示「中」
+    return (
+      <span className="px-2 py-0.5 rounded-md bg-[#FBBF24]/15 border border-[#FBBF24]/25 text-[#FBBF24] font-mono text-[11px] shrink-0">
+        中
+      </span>
+    );
+  };
+
+  const getStatusBadge = (t: TaskItem) => {
+    const s = statusOf(t);
+    if (s === TaskStatus.COMPLETED) {
+      return (
+        <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/25 text-emerald-300 text-[11px] shrink-0">
+          已完成
+        </span>
+      );
+    }
+    if (s === TaskStatus.IN_PROGRESS) {
+      return (
+        <span className="px-2 py-0.5 rounded-md bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 text-[11px] shrink-0">
+          进行中
+        </span>
+      );
+    }
+    return (
+      <span className="px-2 py-0.5 rounded-md bg-slate-500/15 border border-slate-500/25 text-slate-300 text-[11px] shrink-0">
+        待开始
+      </span>
+    );
+  };
+
   return (
-    <div className="p-4 sm:p-6 md:p-8 space-y-6 max-w-[1360px] w-full mx-auto font-sans">
-      {/* Top Greeting Section & Weather Pill (Image 2) */}
-      <section className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-white flex items-center gap-2.5">
-            <span>早上好，张三</span>
-            <span className="text-2xl animate-bounce">👋</span>
-          </h2>
-          <p className="text-xs md:text-sm text-[#908fa0] mt-1 flex items-center gap-2 font-sans">
-            <span>今天是 9月6日</span>
-            <span className="inline-block w-1 h-1 rounded-full bg-[#908fa0]"></span>
-            <span>让我们一起高效工作，今日有 {highPriorityPending} 项重点任务待推进</span>
-          </p>
-        </div>
-
-        {/* Weather and Location Glass Capsule */}
-        <div className="flex items-center gap-3 self-start md:self-auto px-4 py-2 rounded-2xl bg-[#202634]/50 border border-white/[0.08] backdrop-blur-xl specular-card">
-          <div className="flex items-center gap-2">
-            <Sun className="w-5 h-5 text-[#FBBF24] fill-[#FBBF24]" />
-            <span className="font-mono text-[15px] font-semibold text-white">22℃</span>
-          </div>
-          <span className="text-white/20">|</span>
-          <div className="flex items-center gap-2 text-[#c7c4d7] text-xs font-sans">
-            <span>晴朗 · 深圳南山</span>
-            <span className="px-1.5 py-0.5 rounded bg-[#34D399]/15 text-[#34D399] text-[10px] font-mono border border-[#34D399]/25">
-              空气优
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* Row 1: Three High-Density Metric & Timeline Cards (Image 2 Frosted Acrylic) */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 relative z-10">
-        {/* Metric Card 1: 今日任务 (Overview Progress) */}
-        <div 
-          onClick={() => onOpenAllTasksModal?.()}
-          className="acrylic-card rounded-2xl p-5 flex flex-col justify-between h-40 group cursor-pointer hover:border-white/[0.22] hover:bg-white/[0.08] transition-all specular-chamfer"
-          title="点击查看全部任务详情"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-[#c7c9dc] tracking-wide group-hover:text-white transition-colors">今日任务</span>
-            <div className="w-7 h-7 rounded-lg bg-[#c0c1ff]/15 border border-[#c0c1ff]/30 flex items-center justify-center group-hover:scale-105 transition-transform">
-              <CheckCircle2 className="w-4 h-4 text-[#c0c1ff]" />
-            </div>
-          </div>
-
+    <div className="flex-1 overflow-y-auto px-6 py-6 font-sans text-[#e1e2eb]">
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* 4.1 顶部区域 */}
+        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2">
           <div>
-            <div className="flex items-baseline gap-2 mb-3">
-              <span className="font-mono text-3xl font-bold text-white tracking-tight drop-shadow-[0_2px_8px_rgba(255,255,255,0.15)]">
-                {completedCount}
-              </span>
-              <span className="font-mono text-sm text-[#8c8ea3]">/ {totalCount}</span>
-            </div>
-
-            {/* Glowing progress bar */}
-            <div className="w-full h-2 rounded-full bg-black/40 border border-white/10 overflow-hidden relative mb-2 p-[1px]">
-              <div 
-                className="h-full rounded-full glow-progress transition-all duration-500" 
-                style={{ width: `${completionPercentage}%` }}
-              />
-            </div>
+            <h1 className="text-2xl font-bold text-white tracking-tight">
+              {getGreeting()}
+            </h1>
+            <p className="text-xs text-[#8c8ea3] mt-1 font-mono">
+              {formattedDate}
+            </p>
           </div>
-
-          <div className="flex items-center justify-between text-[11px] text-[#8c8ea3] font-mono">
-            <span>完成度 {completionPercentage}%</span>
-            <span className="text-[#c0c1ff] font-semibold group-hover:underline">查看全部 {totalCount} 项 →</span>
+          <div className="shrink-0">
+            <WeatherBadge />
           </div>
-        </div>
+        </header>
 
-        {/* Metric Card 2: 待办任务 (Pending Breakdown) */}
-        <div className="acrylic-card rounded-2xl p-5 flex flex-col justify-between h-40 group cursor-default specular-chamfer">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-[#c7c9dc] tracking-wide">待办任务</span>
-            <div className="w-7 h-7 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center">
-              <Clock className="w-4 h-4 text-[#c7c9dc]" />
-            </div>
-          </div>
-
-          <div className="my-auto">
-            <div className="flex items-baseline gap-2 mb-3">
-              <span className="font-mono text-3xl font-bold text-white tracking-tight drop-shadow-[0_2px_8px_rgba(255,255,255,0.15)]">
-                {pendingCount}
-              </span>
-              <span className="text-xs text-[#8c8ea3]">待处理事项</span>
-            </div>
-
-            {/* Status tags with quick filter trigger */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setFilterPriority(filterPriority === 'high' ? null : 'high')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-mono transition-all ${
-                  filterPriority === 'high'
-                    ? 'bg-[#F87171]/30 border-[#F87171] text-[#F87171] shadow-[0_0_12px_rgba(248,113,113,0.3)]'
-                    : 'bg-[#F87171]/15 border-[#F87171]/25 text-[#F87171] hover:bg-[#F87171]/25'
-                }`}
-                title="点击过滤高优先级"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-[#F87171] animate-pulse"></span>
-                <span>{highPriorityPending} 高优先级</span>
-              </button>
-
-              <button
-                onClick={() => setFilterPriority(null)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-mono transition-all ${
-                  filterPriority === null
-                    ? 'bg-white/20 border-white/30 text-white shadow-[0_0_10px_rgba(255,255,255,0.1)]'
-                    : 'bg-white/5 border-white/10 text-[#c7c9dc] hover:bg-white/10'
-                }`}
-                title="显示全部"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-[#8c8ea3]"></span>
-                <span>{normalPriorityPending} 普通</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Metric Card 3: 今日计划 (Agenda Schedule) */}
-        <div className="acrylic-card rounded-2xl p-5 flex flex-col justify-between h-40 group cursor-default specular-chamfer">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-[#c7c9dc] tracking-wide">今日计划</span>
-              <div className="w-7 h-7 rounded-lg bg-[#7bd0ff]/15 border border-[#7bd0ff]/30 flex items-center justify-center">
-                <Calendar className="w-4 h-4 text-[#7bd0ff]" />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-mono text-xs text-[#7bd0ff] font-semibold">{meeting.time}</span>
-              <span className="px-1.5 py-0.5 rounded bg-[#7bd0ff]/20 text-[#7bd0ff] text-[10px] font-mono border border-[#7bd0ff]/35">
-                {meeting.platform}
-              </span>
-            </div>
-
-            <h3 className="text-sm md:text-base font-semibold text-white tracking-tight truncate">
-              {meeting.title}
-            </h3>
-          </div>
-
-          <div className="flex items-center justify-between pt-2 border-t border-white/[0.08]">
-            <div className="flex -space-x-1.5">
-              {meeting.participants.map((p, i) => (
-                <div 
-                  key={i} 
-                  className={`w-6 h-6 rounded-full ${p.avatarBg} border border-white/30 flex items-center justify-center text-[10px] text-white font-medium shadow-sm`}
-                  title={p.name}
-                >
-                  {p.name}
-                </div>
-              ))}
-              <div className="w-6 h-6 rounded-full bg-purple-600/70 border border-white/30 flex items-center justify-center text-[10px] text-white font-mono shadow-sm">
-                +4
-              </div>
-            </div>
-
-            <button
-              onClick={onOpenMeetingModal}
-              className="acrylic-pill px-3 py-1 rounded-lg text-white text-[11px] font-sans hover:bg-white/20 transition-all flex items-center gap-1 active:scale-95 shadow-sm"
-            >
-              <span>进入会议</span>
-              <ExternalLink className="w-3 h-3 text-[#c7c9dc]" />
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* Row 2: Three In-Depth Operational Workflows (Image 2 Frosted Acrylic) */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-5 relative z-10">
-        {/* Workflow 1: 今日重点任务 (Interactive Checklist) */}
-        <div className="acrylic-card rounded-2xl p-5 flex flex-col justify-between specular-chamfer">
-          <div>
-            <div className="flex items-center justify-between pb-3.5 mb-2 border-b border-white/[0.08]">
-              <div className="flex items-center gap-2">
-                <Flame className="w-4 h-4 text-[#F97316] fill-[#F97316]" />
-                <h3 className="text-sm font-semibold text-white tracking-wide">今日重点任务</h3>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-[#c0c1ff]">
-                  {completedCount}/{totalCount}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setFilterPriority(null);
-                    onOpenAllTasksModal?.();
-                  }}
-                  className="text-[11px] font-mono text-[#c0c1ff] hover:text-white transition-colors flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] cursor-pointer"
-                  title="打开全部任务管理面板"
-                >
-                  <span>查看全部 ({totalCount})</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+        {/* 4.8 两列响应式布局 */}
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)] gap-6 items-start">
+          {/* 左列：今日任务概览、任务列表、快捷操作 */}
+          <div className="space-y-6 min-w-0">
+            {/* 4.2 今日任务概览四个方块 */}
+            <section aria-label="今日任务概览">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {/* 待开始 */}
                 <button
                   type="button"
-                  onClick={() => setIsCardExpanded(prev => !prev)}
-                  className="text-[11px] font-mono text-[#8c8ea3] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-white/5 cursor-pointer"
-                  title={isCardExpanded ? '收起为前4项' : '卡片内展开所有任务'}
-                >
-                  {isCardExpanded ? '收起' : '展开'}
-                </button>
-              </div>
-            </div>
-
-            {/* Task Items List */}
-            <div className={`space-y-2.5 ${isCardExpanded ? 'max-h-72 overflow-y-auto pr-1' : ''}`}>
-              {(isCardExpanded ? displayTasks : displayTasks.slice(0, 4)).map((task) => (
-                <div
-                  key={task.id}
-                  onClick={() => onToggleTask(task.id)}
-                  className={`group flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
-                    task.completed 
-                      ? 'bg-white/[0.02] border-white/[0.04] opacity-55'
-                      : 'bg-white/[0.04] border-white/[0.10] hover:border-white/[0.22] hover:bg-white/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.2)]'
+                  onClick={() => setActiveTab('pending')}
+                  aria-pressed={activeTab === 'pending'}
+                  className={`p-4 rounded-2xl acrylic-card text-left transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                    activeTab === 'pending'
+                      ? 'border-indigo-400/50 bg-indigo-500/10 shadow-lg'
+                      : 'hover:border-white/20'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <button
-                      type="button"
-                      aria-label={`标记任务 ${task.title} 为${task.completed ? '未完成' : '已完成'}`}
-                      className="shrink-0 transition-transform active:scale-90"
-                    >
-                      {task.completed ? (
-                        <CheckCircle2 className="w-4 h-4 text-[#34D399]" />
-                      ) : (
-                        <Circle className="w-4 h-4 text-[#8c8ea3] group-hover:text-[#c0c1ff] transition-colors" />
-                      )}
-                    </button>
-                    <span 
-                      className={`text-xs md:text-[13px] truncate transition-colors ${
-                        task.completed 
-                          ? 'line-through text-[#656375]' 
-                          : 'text-[#f1f2f8] group-hover:text-white font-normal'
-                      }`}
-                    >
-                      {task.title}
-                    </span>
-                  </div>
+                  <span className="text-xs text-[#8c8ea3] block">待开始</span>
+                  <span className="text-2xl font-semibold text-white font-mono mt-1 block">
+                    {pendingCount}
+                  </span>
+                </button>
 
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
-                    {getPriorityBadge(task.priority)}
-                    <span className="font-mono text-[11px] text-[#8c8ea3]">
-                      {task.dueTime}
-                    </span>
-                  </div>
+                {/* 进行中 */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('in_progress')}
+                  aria-pressed={activeTab === 'in_progress'}
+                  className={`p-4 rounded-2xl acrylic-card text-left transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                    activeTab === 'in_progress'
+                      ? 'border-indigo-400/50 bg-indigo-500/10 shadow-lg'
+                      : 'hover:border-white/20'
+                  }`}
+                >
+                  <span className="text-xs text-[#8c8ea3] block">进行中</span>
+                  <span className="text-2xl font-semibold text-indigo-300 font-mono mt-1 block">
+                    {inProgressCount}
+                  </span>
+                </button>
+
+                {/* 已完成 */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('completed')}
+                  aria-pressed={activeTab === 'completed'}
+                  className={`p-4 rounded-2xl acrylic-card text-left transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                    activeTab === 'completed'
+                      ? 'border-indigo-400/50 bg-indigo-500/10 shadow-lg'
+                      : 'hover:border-white/20'
+                  }`}
+                >
+                  <span className="text-xs text-[#8c8ea3] block">已完成</span>
+                  <span className="text-2xl font-semibold text-emerald-400 font-mono mt-1 block">
+                    {completedCount}
+                  </span>
+                </button>
+
+                {/* 总计 */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('all')}
+                  aria-pressed={activeTab === 'all'}
+                  className={`p-4 rounded-2xl acrylic-card text-left transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                    activeTab === 'all'
+                      ? 'border-indigo-400/50 bg-indigo-500/10 shadow-lg'
+                      : 'hover:border-white/20'
+                  }`}
+                >
+                  <span className="text-xs text-[#8c8ea3] block">总计</span>
+                  <span className="text-2xl font-semibold text-white font-mono mt-1 block">
+                    {totalCount}
+                  </span>
+                </button>
+              </div>
+            </section>
+
+            {/* 4.3 任务列表卡片 */}
+            <section className="rounded-2xl acrylic-card p-5 space-y-4" aria-label="任务列表">
+              {/* 标题栏与标签页 */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-white/[0.08]">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-white">任务列表</h2>
+                  <span className="text-xs text-[#8c8ea3] font-mono">
+                    ({sortedTasks.length})
+                  </span>
                 </div>
-              ))}
 
-              {/* Inline task creator */}
-              {isAddingInline && (
-                <form onSubmit={handleCreateTask} className="p-2.5 rounded-xl acrylic-input border border-[#8083ff]/40 animate-in fade-in duration-150">
-                  <input
-                    type="text"
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    placeholder="输入新任务标题，按回车添加..."
-                    className="w-full bg-transparent border-none outline-none text-xs text-white placeholder:text-[#8c8ea3] mb-2 font-sans"
-                    autoFocus
-                  />
-                  <div className="flex items-center justify-end gap-2 text-xs">
+                <div className="flex items-center gap-3">
+                  {/* 状态标签页 */}
+                  <div role="tablist" aria-label="任务状态筛选" className="flex items-center p-0.5 rounded-lg bg-black/30 border border-white/10 text-xs">
+                    {(['all', 'pending', 'in_progress', 'completed'] as FilterTab[]).map(tabKey => {
+                      const labelMap: Record<FilterTab, string> = {
+                        all: '全部',
+                        pending: '待开始',
+                        in_progress: '进行中',
+                        completed: '已完成',
+                      };
+                      const isSelected = activeTab === tabKey;
+                      return (
+                        <button
+                          key={tabKey}
+                          type="button"
+                          role="tab"
+                          aria-selected={isSelected}
+                          onClick={() => setActiveTab(tabKey)}
+                          className={`px-2.5 py-1 rounded-md text-xs transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white font-medium shadow-sm'
+                              : 'text-[#8c8ea3] hover:text-white'
+                          }`}
+                        >
+                          {labelMap[tabKey]}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* 新建任务入口 */}
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingInline(true)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>新建</span>
+                  </button>
+
+                  {/* 查看全部 */}
+                  {onOpenAllTasksModal && (
                     <button
                       type="button"
-                      onClick={() => setIsAddingInline(false)}
-                      className="px-2 py-0.5 text-[#8c8ea3] hover:text-white text-[11px]"
+                      onClick={onOpenAllTasksModal}
+                      className="text-xs text-[#8c8ea3] hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                     >
-                      取消
+                      查看全部
                     </button>
-                    <button
-                      type="submit"
-                      className="px-2.5 py-0.5 rounded-lg bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] text-white text-[11px] font-semibold shadow-md shadow-[#6366F1]/30"
-                    >
-                      确定
-                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 4.4 新建任务行内表单 */}
+              {isAddingInline && (
+                <form
+                  onSubmit={handleInlineSubmit}
+                  className="p-3.5 rounded-xl bg-black/40 border border-indigo-500/30 space-y-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={inlineInputRef}
+                      type="text"
+                      value={newTitle}
+                      onChange={(e) => setNewTitle(e.target.value)}
+                      placeholder="输入任务标题..."
+                      className="flex-1 bg-white/[0.06] border border-white/15 rounded-lg px-3 py-1.5 text-xs text-white placeholder-[#8c8ea3] focus:outline-none focus:border-indigo-400"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    {/* 优先级单选 */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[#8c8ea3] text-[11px]">优先级：</span>
+                      {(['high', 'medium', 'low'] as const).map(p => {
+                        const labels = { high: '高', medium: '中', low: '低' };
+                        const isSelected = newPriority === p;
+                        return (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => setNewPriority(p)}
+                            className={`px-2 py-0.5 rounded text-[11px] border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                              isSelected
+                                ? 'bg-indigo-500/20 border-indigo-400 text-indigo-300 font-medium'
+                                : 'bg-transparent border-white/10 text-[#8c8ea3] hover:text-white'
+                            }`}
+                          >
+                            {labels[p]}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* 操作按钮 */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewTitle('');
+                          setIsAddingInline(false);
+                        }}
+                        className="px-2.5 py-1 rounded-lg border border-white/10 text-[#8c8ea3] hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                      >
+                        取消
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSubmitting || !newTitle.trim()}
+                        className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                      >
+                        {isSubmitting ? '添加中...' : '添加'}
+                      </button>
+                    </div>
                   </div>
                 </form>
               )}
-            </div>
-          </div>
 
-          {/* Quick Task Input Hint & All Tasks Link */}
-          <div className="pt-3 mt-3 border-t border-white/[0.08] flex items-center justify-between text-xs">
-            <button
-              type="button"
-              onClick={() => onOpenAllTasksModal?.()}
-              className="flex items-center gap-1.5 text-[11px] text-[#c0c1ff] hover:text-white transition-colors cursor-pointer font-medium"
-              title="打开全部任务中心"
-            >
-              <ListTodo className="w-3.5 h-3.5" />
-              <span>查看全部 {totalCount} 项清单 →</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsAddingInline(true)}
-              className="font-mono text-[#c0c1ff] hover:underline cursor-pointer text-xs flex items-center gap-1 font-semibold"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>添加新项</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Workflow 2: AI 智能助手建议 (Image 2 Frosted Acrylic) */}
-        <div className="acrylic-card rounded-2xl p-5 flex flex-col justify-between overflow-hidden specular-chamfer relative">
-          {/* Internal ambient illumination orb inside the acrylic */}
-          <div className="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-gradient-to-br from-indigo-500/30 to-purple-500/20 blur-2xl pointer-events-none" />
-
-          <div>
-            <div className="flex items-center justify-between pb-3.5 mb-2 border-b border-white/[0.08]">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-[#6366F1] to-[#A855F7] flex items-center justify-center shadow-md shadow-purple-500/30 border border-white/20">
-                  <Sparkles className="w-3.5 h-3.5 text-white" />
-                </div>
-                <h3 className="text-sm font-semibold text-white tracking-wide">AI 助手建议</h3>
-              </div>
-              <span className="px-2 py-0.5 rounded-full bg-[#8B5CF6]/25 border border-[#8B5CF6]/40 text-[#c4abff] text-[10px] font-mono shadow-sm">
-                GPT-4o 增强
-              </span>
-            </div>
-
-            <p className="text-xs text-[#8c8ea3] mb-3.5 font-sans">
-              基于你本周的工作内容，已为你自动化准备了 3 条高效建议：
-            </p>
-
-            {/* AI Suggestion Action Cards */}
-            <div className="space-y-2.5">
-              {suggestions.map((sug) => (
-                <div
-                  key={sug.id}
-                  className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.10] hover:border-[#8083ff]/50 hover:bg-white/[0.08] transition-all group shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
-                >
-                  <div className="flex items-center gap-2 min-w-0 pr-2">
-                    <span className="text-[#c0c1ff] text-[10px]">◇</span>
-                    <span className="text-xs md:text-[13px] text-[#f1f2f8] truncate group-hover:text-white font-normal">
-                      {sug.title}
-                    </span>
+              {/* 任务项列表 */}
+              <div className="space-y-1.5 overflow-x-hidden">
+                {!tasksLoaded ? (
+                  <div className="py-12 text-center text-xs text-[#8c8ea3]">
+                    加载中…
                   </div>
+                ) : visibleTasks.length === 0 ? (
+                  <div className="py-12 text-center text-xs text-[#8c8ea3]">
+                    还没有任务，点击「新建任务」开始
+                  </div>
+                ) : filteredTasks.length === 0 ? (
+                  <div className="py-12 text-center text-xs text-[#8c8ea3]">
+                    该状态下暂无任务
+                  </div>
+                ) : (
+                  displayedTasks.map(task => {
+                    const isDone = statusOf(task) === TaskStatus.COMPLETED || task.completed;
+                    return (
+                      <div
+                        key={task.id}
+                        className="group flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-white/[0.04] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/[0.1] transition-all"
+                      >
+                        {/* 左侧：勾选按钮、优先级、标题 */}
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          {/* 唯一触发 onToggleTask 的元素，整行无点击绑定 */}
+                          <button
+                            type="button"
+                            aria-label={`标记「${task.title}」为${isDone ? '未完成' : '已完成'}`}
+                            onClick={() => onToggleTask(task.id)}
+                            className="p-1 rounded text-[#8c8ea3] hover:text-white transition-colors cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                          >
+                            {isDone ? (
+                              <CheckCircle2 className="w-4 h-4 text-[#34D399]" />
+                            ) : (
+                              <Circle className="w-4 h-4" />
+                            )}
+                          </button>
+
+                          {getPriorityBadge(task.priority)}
+
+                          <span
+                            className={`text-xs truncate min-w-0 ${
+                              isDone ? 'line-through text-[#656375]' : 'text-[#f1f2f8]'
+                            }`}
+                          >
+                            {task.title}
+                          </span>
+                        </div>
+
+                        {/* 右侧：状态徽标、截止时间、删除按钮 */}
+                        <div className="flex items-center gap-3 shrink-0">
+                          {getStatusBadge(task)}
+
+                          {/* 所有任务使用同一种文字样式，不因日期已过而变色或加前缀 */}
+                          <span className="font-mono text-xs text-[#8c8ea3] shrink-0">
+                            {task.dueTime}
+                          </span>
+
+                          {/* 删除按钮 */}
+                          <button
+                            type="button"
+                            aria-label={`删除任务「${task.title}」`}
+                            onClick={() => onDeleteTask(task.id)}
+                            className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 rounded text-[#8c8ea3] hover:text-[#F87171] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* 底部还有 N 项展开入口 */}
+              {overflowCount > 0 && onOpenAllTasksModal && (
+                <div className="pt-2 text-center border-t border-white/[0.06]">
                   <button
-                    onClick={() => onExecuteSuggestion(sug)}
-                    className="px-2.5 py-1 rounded-lg bg-[#c0c1ff]/15 border border-[#c0c1ff]/30 text-[#c0c1ff] text-[11px] font-sans hover:bg-[#c0c1ff] hover:text-[#0b0730] transition-all shrink-0 active:scale-95 shadow-sm font-semibold"
+                    type="button"
+                    onClick={onOpenAllTasksModal}
+                    className="text-xs text-[#8c8ea3] hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   >
-                    去执行
+                    还有 {overflowCount} 项，查看全部 →
                   </button>
                 </div>
-              ))}
-            </div>
-          </div>
+              )}
+            </section>
 
-          {/* Trailing Link */}
-          <div className="pt-3 mt-3 border-t border-white/[0.08] flex items-center justify-between">
-            <button
-              onClick={onNavigateToAI}
-              className="text-xs text-[#c0c1ff] hover:text-white transition-colors flex items-center gap-1 font-semibold"
-            >
-              <span>查看全部建议与上下文流</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-            <Bot className="w-4 h-4 text-[#8c8ea3]" />
-          </div>
-        </div>
-
-        {/* Workflow 3: 知识动态 (Image 2 Frosted Acrylic) */}
-        <div className="acrylic-card rounded-2xl p-5 flex flex-col justify-between specular-chamfer">
-          <div>
-            <div className="flex items-center justify-between pb-3.5 mb-2 border-b border-white/[0.08]">
-              <div className="flex items-center gap-2">
-                <Compass className="w-4 h-4 text-[#38BDF8]" />
-                <h3 className="text-sm font-semibold text-white tracking-wide">知识动态</h3>
+            {/* 4.7 快捷操作（仅两项：新建任务、开始对话） */}
+            <section className="rounded-2xl acrylic-card p-5 space-y-3" aria-label="快捷操作">
+              <h2 className="text-sm font-semibold text-white">快捷操作</h2>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsAddingInline(true)}
+                  className="flex items-center justify-center gap-2 p-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/20 text-xs text-white transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                >
+                  <Plus className="w-4 h-4 text-indigo-400" />
+                  <span>新建任务</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onNavigateToAI}
+                  className="flex items-center justify-center gap-2 p-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/20 text-xs text-white transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                >
+                  <MessageSquare className="w-4 h-4 text-sky-400" />
+                  <span>开始对话</span>
+                </button>
               </div>
-              <button 
+            </section>
+          </div>
+
+          {/* 右列：AI 助手、今日日程、最近动态 */}
+          <div className="space-y-6 min-w-0">
+            {/* 4.5 AI 助手卡片 */}
+            <section className="rounded-2xl acrylic-card p-5 space-y-4" aria-label="AI 助手">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-indigo-400" />
+                  <h2 className="text-sm font-semibold text-white">AI 助手</h2>
+                </div>
+              </div>
+              <p className="text-xs text-[#8c8ea3] leading-relaxed">
+                基于你的任务和上下文，提供智能建议与帮助。
+              </p>
+
+              {/* 按钮样式的跳转入口，非输入框 */}
+              <button
+                type="button"
                 onClick={onNavigateToAI}
-                className="text-[11px] font-mono text-[#8c8ea3] hover:text-[#c0c1ff] transition-colors flex items-center gap-0.5"
+                className="w-full flex items-center justify-between p-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-indigo-400/30 text-xs text-[#8c8ea3] hover:text-white transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
-                <span>最近更新</span>
-                <ChevronRight className="w-3.5 h-3.5" />
+                <span>有什么可以帮你？</span>
+                <ArrowRight className="w-3.5 h-3.5 text-indigo-400" />
               </button>
-            </div>
 
-            {/* Feed Items */}
-            <div className="space-y-3">
-              {knowledge.map((item, idx) => {
-                const colorConfig = idx === 0 
-                  ? 'bg-[#8B5CF6]/15 border-[#8B5CF6]/30 text-[#c4abff]' 
-                  : idx === 1 
-                  ? 'bg-[#38BDF8]/15 border-[#38BDF8]/30 text-[#7bd0ff]'
-                  : 'bg-[#34D399]/15 border-[#34D399]/30 text-[#34D399]';
+              {/* 最多展示 2 条建议 */}
+              {suggestions.slice(0, 2).length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+                  {suggestions.slice(0, 2).map(s => (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-black/20 border border-white/[0.04] text-xs"
+                    >
+                      <span className="truncate text-[#c7c9dc] flex-1">
+                        {s.title}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onExecuteSuggestion(s)}
+                        className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                      >
+                        <span>去执行</span>
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
 
-                return (
-                  <div
-                    key={item.id}
-                    onClick={() => onOpenKnowledgeDetail(item)}
-                    className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/[0.06] transition-colors cursor-pointer group"
-                  >
-                    <div className={`w-8 h-8 rounded-xl ${colorConfig} border flex items-center justify-center shrink-0`}>
-                      <BookOpen className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs md:text-[13px] font-medium text-[#e1e2eb] group-hover:text-[#c0c1ff] transition-colors truncate">
-                        {item.title}
-                      </p>
-                      <p className="text-[11px] text-[#908fa0] flex items-center gap-1.5 mt-0.5 font-mono">
-                        <span>{item.timeAgo}</span>
-                        <span className="w-1 h-1 rounded-full bg-[#908fa0]"></span>
-                        <span>{item.category}</span>
-                      </p>
-                    </div>
-                    <ExternalLink className="w-3.5 h-3.5 text-[#908fa0] group-hover:text-white transition-colors shrink-0" />
+            {/* 4.11 今日日程卡片（meeting 为 null 时不渲染） */}
+            {meeting && (
+              <section className="rounded-2xl acrylic-card p-5 space-y-4" aria-label="今日日程">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Video className="w-4 h-4 text-sky-400" />
+                    <h2 className="text-sm font-semibold text-white">今日日程</h2>
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                </div>
 
-          {/* Sync indicator */}
-          <div className="pt-3 mt-3 border-t border-white/[0.08] flex items-center justify-between text-[11px] text-[#908fa0] font-mono">
-            <span>同步索引：1,248 篇文档</span>
-            <span className="text-[#34D399] flex items-center gap-1 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] animate-pulse"></span>
-              实时更新中
-            </span>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-mono text-white/90 font-medium">
+                      {meeting.time}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-white/10 text-[11px] text-[#c7c9dc]">
+                      {meeting.platform}
+                    </span>
+                  </div>
+                  <p className="text-xs text-white font-medium truncate">
+                    {meeting.title}
+                  </p>
+                </div>
+
+                {/* 参会头像：最多前 4 个，不写死 +4 */}
+                {meeting.participants && meeting.participants.length > 0 && (
+                  <div className="flex items-center gap-1.5 pt-1">
+                    {meeting.participants.slice(0, 4).map((p, idx) => (
+                      <div
+                        key={idx}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white font-medium ${p.avatarBg}`}
+                        title={p.name}
+                      >
+                        {p.name.charAt(0)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 底部按钮 */}
+                <div className="flex items-center gap-2 pt-2 border-t border-white/[0.06]">
+                  {/^https?:\/\//i.test(meeting.link) ? (
+                    <a
+                      href={meeting.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                    >
+                      <span>立即入会</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      aria-disabled="true"
+                      className="flex-1 py-2 px-3 rounded-xl bg-white/10 text-white/40 text-xs font-medium cursor-not-allowed"
+                    >
+                      暂无会议链接
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={onOpenMeetingModal}
+                    className="py-2 px-3.5 rounded-xl border border-white/15 hover:border-white/30 text-xs text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  >
+                    详情
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {/* 4.6 最近动态卡片（仅从 tasks 推导，不虚构） */}
+            <section className="rounded-2xl acrylic-card p-5 space-y-3" aria-label="最近动态">
+              <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-emerald-400" />
+                  <h2 className="text-sm font-semibold text-white">最近动态</h2>
+                </div>
+              </div>
+
+              {activities.length === 0 ? (
+                <div className="py-6 text-center text-xs text-[#8c8ea3]">
+                  暂无动态
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {activities.map(act => (
+                    <div key={act.id} className="flex items-start justify-between gap-3 text-xs">
+                      <span className="text-[#c7c9dc] truncate min-w-0 flex-1">
+                        {act.text}
+                      </span>
+                      <span className="text-[#8c8ea3] text-[11px] font-mono shrink-0">
+                        {formatRelativeTime(act.timeIso)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           </div>
         </div>
-      </section>
-
-      {/* Quick Bottom Linear Shortcut Dock (Image 2) */}
-      <footer className="rounded-2xl bg-white/[0.02] border border-white/[0.08] p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-[#908fa0] text-xs">
-        <div className="flex flex-wrap items-center gap-2 md:gap-3">
-          <span className="px-2 py-0.5 rounded bg-white/10 text-white font-mono text-[11px]">
-            Linear 快捷交互范式
-          </span>
-          <span className="hidden sm:inline">支持快捷调出工作流与模型编排：</span>
-          <span className="text-[#e1e2eb] font-mono text-[11px] bg-white/5 px-2 py-0.5 rounded border border-white/[0.08]">
-            ⌘ + J 对话助理
-          </span>
-          <span className="hidden md:inline text-[#e1e2eb] font-mono text-[11px] bg-white/5 px-2 py-0.5 rounded border border-white/[0.08]">
-            ⌘ + B 隐藏侧栏
-          </span>
-          <span className="hidden lg:inline text-[#e1e2eb] font-mono text-[11px] bg-white/5 px-2 py-0.5 rounded border border-white/[0.08]">
-            ⌘ + K 全局搜索
-          </span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="w-2 h-2 rounded-full bg-[#34D399] animate-pulse"></span>
-          <span className="font-mono text-[11px] text-[#e1e2eb]">模型响应延时: 18ms</span>
-        </div>
-      </footer>
+      </div>
     </div>
   );
 };

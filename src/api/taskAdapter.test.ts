@@ -103,6 +103,19 @@ assert(uiTask.priority === 'high', 'priority matches HIGH');
 assert(uiTask.isImportant === true, 'isImportant matches HIGH');
 assert(uiTask.category === '产品研发', 'category matches');
 assert(uiTask.dueTime.startsWith('今天 14:30'), 'dueTime formatted');
+assert(uiTask.status === TaskStatus.COMPLETED, 'status matches');
+assert(uiTask.dueAt === todayIso, 'dueAt matches');
+assert(uiTask.createdAt === domainTask.createdAt, 'createdAt matches');
+assert(uiTask.updatedAt === domainTask.updatedAt, 'updatedAt matches');
+assert(uiTask.completedAt === domainTask.completedAt, 'completedAt matches');
+
+// Test dueAt undefined outputs null
+const taskNoDueAt: Task = {
+  ...domainTask,
+  dueAt: undefined,
+};
+const uiTaskNoDueAt = domainTaskToUiTask(taskNoDueAt);
+assert(uiTaskNoDueAt.dueAt === null, 'dueAt undefined outputs null');
 console.log('✓ domainTaskToUiTask passed');
 
 // 6. createTaskInputFromUi

@@ -1,3 +1,5 @@
+import { TaskStatus } from './domain';
+
 export type TaskPriority = 'high' | 'medium' | 'low' | 'normal';
 
 export interface TaskItem {
@@ -8,6 +10,11 @@ export interface TaskItem {
   dueTime: string;
   category?: string;
   isImportant?: boolean;
+  status?: TaskStatus;
+  dueAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  completedAt?: string | null;
 }
 
 export interface AISuggestion {

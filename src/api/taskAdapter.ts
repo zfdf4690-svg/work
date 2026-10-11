@@ -197,6 +197,11 @@ export function domainTaskToUiTask(task: Task): TaskItem {
     dueTime: formatDueAtToUi(task.dueAt),
     category: task.category,
     isImportant: isImportantFromDomain(task.priority),
+    status: task.status,
+    dueAt: task.dueAt ?? null,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+    completedAt: task.completedAt ?? null,
   };
 }
 
