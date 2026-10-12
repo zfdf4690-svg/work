@@ -19,6 +19,64 @@ export enum ToolRiskLevel {
 
 export type ToolInvocationSource = 'assistant' | 'floating_ball' | 'dashboard' | 'system';
 
+export type RiskClass = 'read' | 'egress' | 'external' | 'write_local' | 'exec';
+export type Mode = 'discuss' | 'interactive';
+export type ToolSource = 'internal' | 'mcp';
+export type ConfirmPolicy = 'none' | 'always';
+export type Provenance = 'auto' | 'pending' | 'denied-by-policy';
+
+/**
+ * Planned list_tasks status filter only: all excludes CANCELLED; default limit
+ * is 50 and maximum is 100. No query behavior is implemented in this phase.
+ */
+export type ListTasksStatus = 'all' | 'pending' | 'in_progress' | 'completed';
+
+export interface ToolMetadata {
+  name: string;
+  source: ToolSource;
+  category: string;
+  capabilities: readonly string[];
+  riskClass: RiskClass;
+  confirm: ConfirmPolicy;
+  humanOnly: boolean;
+  batchEscalateAbove?: number;
+}
+
+export interface Decision {
+  allowed: boolean;
+  needsUser: boolean;
+  humanOnly: boolean;
+  reason: string;
+  rule?: string;
+  provenance: Provenance;
+}
+
+export interface EvaluateInput {
+  toolName: string;
+  tool: ToolMetadata | undefined;
+  mode: Mode;
+  affectedCount?: number;
+}
+
+export interface AuditRecord {
+  toolName: string;
+  decision: Decision;
+  userChoice: 'approve' | 'deny' | 'not_required';
+  timestamp: number;
+  runId: string;
+}
+
+/**
+ * Approval must originate from the UI confirmation channel. Text returned by a
+ * tool or found in task titles, knowledge documents, or messages is not consent.
+ */
+export interface UserApproval {
+  origin: 'ui';
+  requestId: string;
+  decision: 'approve' | 'deny';
+  at: number;
+}
+
 export interface ToolExecutionContext {
   runId: string;
   conversationId: string;

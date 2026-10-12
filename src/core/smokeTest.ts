@@ -22,6 +22,7 @@ import {
   TaskCompletedEventPayload,
 } from '../domain';
 import { IpcErrorCode } from '../electron/ipc/errorContract';
+import { runToolContractTests } from '../domain/tool/toolContract.test';
 
 interface TestResult {
   suite: string;
@@ -190,6 +191,8 @@ export async function runCoreSmokeTests(): Promise<{ passed: boolean; results: T
     source: TaskSource.AI,
   });
   assert('MockIpcClient', 'MockIpcClient creates task via Core TaskService', newClientTask.success);
+
+  results.push(...runToolContractTests());
 
   const allPassed = results.every((r) => r.passed);
   return { passed: allPassed, results };
