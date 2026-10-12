@@ -5,7 +5,8 @@ import {
   registerTool,
   withIsolatedToolRegistryForTests,
 } from './registry';
-import type { Decision, ToolMetadata } from './tool.types';
+import { registerTaskToolMetadata, TASK_QUERY_CONTRACT_METADATA } from './taskToolMetadata';
+import type { Decision, ListTasksStatus, ToolMetadata } from './tool.types';
 
 export interface ToolContractTestResult {
   suite: string;
@@ -289,6 +290,81 @@ const cases: TestCase[] = [
       equal(getTool(valid.name), valid, 'Registered metadata should be discoverable');
       truthy(listTools().some((tool) => tool.name === valid.name), 'Registered metadata should be listed');
       throws(() => registerTool(valid), 'already registered', 'Duplicate registration');
+    },
+  },
+  {
+    name: 'Task tool metadata registers all six tools with the approved decisions',
+    run: () => {
+      const metadata = registerTaskToolMetadata();
+      deepEqual(
+        metadata.map((tool) => tool.name),
+        ['get_task', 'list_tasks', 'create_task', 'update_task', 'complete_task', 'delete_task'],
+        'Registered Task tools'
+      );
+
+      for (const tool of metadata) {
+        const discussDecision = evaluateToolCall({ toolName: tool.name, tool, mode: 'discuss' });
+        if (tool.riskClass === 'read') {
+          expectDecision(
+            discussDecision,
+            { allowed: true, needsUser: false, provenance: 'auto', reason: 'low risk' },
+            `${tool.name} in discuss mode`
+          );
+        } else {
+          expectDecision(
+            discussDecision,
+            { allowed: false, needsUser: false, provenance: 'denied-by-policy' },
+            `${tool.name} in discuss mode`
+          );
+        }
+
+        const interactiveDecision = evaluateToolCall({
+          toolName: tool.name,
+          tool,
+          mode: 'interactive',
+        });
+        if (tool.name === 'delete_task') {
+          expectDecision(
+            interactiveDecision,
+            {
+              allowed: false,
+              needsUser: true,
+              humanOnly: true,
+              provenance: 'pending',
+            },
+            'delete_task in interactive mode'
+          );
+        } else if (tool.riskClass === 'read') {
+          expectDecision(
+            interactiveDecision,
+            { allowed: true, needsUser: false, provenance: 'auto', reason: 'low risk' },
+            `${tool.name} in interactive mode`
+          );
+        } else {
+          expectDecision(
+            interactiveDecision,
+            {
+              allowed: true,
+              needsUser: false,
+              provenance: 'auto',
+              reason: 'write allowed; reviewed after',
+            },
+            `${tool.name} in interactive mode`
+          );
+        }
+      }
+    },
+  },
+  {
+    name: 'Task query metadata excludes CANCELLED from list all and permits cancelled get',
+    run: () => {
+      const statuses: readonly ListTasksStatus[] =
+        TASK_QUERY_CONTRACT_METADATA.list_tasks.statusFilters;
+      deepEqual(statuses, ['all', 'pending', 'in_progress', 'completed'], 'list_tasks statuses');
+      equal(TASK_QUERY_CONTRACT_METADATA.list_tasks.allExcludesCancelled, true, 'all excludes CANCELLED');
+      equal(TASK_QUERY_CONTRACT_METADATA.get_task.supportsCancelledTasks, true, 'get_task supports CANCELLED');
+      equal(TASK_QUERY_CONTRACT_METADATA.list_tasks.defaultLimit, 50, 'list_tasks default limit');
+      equal(TASK_QUERY_CONTRACT_METADATA.list_tasks.maxLimit, 100, 'list_tasks maximum limit');
     },
   },
   {
