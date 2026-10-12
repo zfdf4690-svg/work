@@ -11,17 +11,10 @@ export const DISABLED_CAPABILITIES = Object.freeze([
   'settings.write',
   'secrets.read',
   'secrets.write',
+  'authz.read',
   'authz.write',
   'db.raw',
 ] as const);
-
-const RISK_ORDER: Record<RiskClass, number> = {
-  read: 0,
-  egress: 1,
-  external: 2,
-  write_local: 3,
-  exec: 3,
-};
 
 export function getEffectiveRisk(tool: ToolMetadata): RiskClass {
   return tool.source === 'mcp' ? 'external' : tool.riskClass;
@@ -33,8 +26,4 @@ export function isPersistentAuthorityTool(toolName: string): boolean {
 
 export function isConsequential(toolName: string, effectiveRisk: RiskClass): boolean {
   return effectiveRisk !== 'read' || isPersistentAuthorityTool(toolName);
-}
-
-export function compareRisk(left: RiskClass, right: RiskClass): number {
-  return RISK_ORDER[left] - RISK_ORDER[right];
 }

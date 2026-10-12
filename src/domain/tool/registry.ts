@@ -27,7 +27,7 @@ export function getTool(name: string): ToolMetadata | undefined {
   return tools.get(name);
 }
 
-export function listTools(): ToolMetadata[] {
+export function listTools(): readonly ToolMetadata[] {
   return [...tools.values()];
 }
 
@@ -36,7 +36,15 @@ export function withIsolatedToolRegistryForTests<T>(run: () => T): T {
   tools.clear();
 
   try {
-    return run();
+    const result = run();
+    if (
+      result !== null &&
+      (typeof result === 'object' || typeof result === 'function') &&
+      'then' in result
+    ) {
+      throw new Error('withIsolatedToolRegistryForTests 仅支持同步回调。');
+    }
+    return result;
   } finally {
     tools.clear();
     for (const [name, metadata] of previousTools) {

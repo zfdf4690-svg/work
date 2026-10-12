@@ -48,7 +48,7 @@ function unregisteredDecision(mode: Mode, toolName: string): Decision {
     case 'discuss':
       return denied(`Unregistered tool "${toolName}" is denied in discuss mode.`, 'unregistered-discuss');
     case 'interactive':
-      return pending(`Unregistered tool "${toolName}" requires user review.`, 'unregistered-interactive');
+      return pending(`Unregistered tool "${toolName}" requires user review.`, 'unregistered-interactive', true);
     default:
       return assertNever(mode);
   }
@@ -63,7 +63,7 @@ function hasDisabledCapability(tool: ToolMetadata): string | undefined {
 export function evaluateToolCall(input: EvaluateInput): Decision {
   const { toolName, tool, mode } = input;
 
-  if (tool === undefined) {
+  if (tool === undefined || tool.name !== toolName) {
     return unregisteredDecision(mode, toolName);
   }
 
@@ -100,10 +100,15 @@ export function evaluateToolCall(input: EvaluateInput): Decision {
   }
 
   if (
-    tool.batchEscalateAbove !== undefined &&
-    (input.affectedCount ?? 1) > tool.batchEscalateAbove
+    tool.batchEscalateAbove !== undefined
   ) {
-    return pending('The affected item count exceeds the configured threshold.', 'batch-escalation');
+    const affectedCount = input.affectedCount ?? 1;
+    if (!Number.isInteger(affectedCount) || affectedCount < 0) {
+      return pending('The affected item count must be a non-negative integer.', 'invalid-affected-count');
+    }
+    if (affectedCount > tool.batchEscalateAbove) {
+      return pending('The affected item count exceeds the configured threshold.', 'batch-escalation');
+    }
   }
 
   if (effectiveRisk === 'write_local' && tool.confirm === 'none') {
