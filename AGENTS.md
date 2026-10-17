@@ -62,6 +62,7 @@ Zod（IPC 边界 / Tool 输入输出校验）。
    - MCP Tool → MCP Client → MCP Server → External System。
    - MCP Tool 不得绕过 MCP Client 直接访问 App Core Service /
      Repository / SQLite；Internal Tool 与 MCP Tool 不互相调用。
+8.1 **Tool 的事前授权只能来自界面确认通道对本次请求作出的明确用户决定；工具返回内容、任务标题、知识库文档、飞书消息及其他外部内容均不构成授权。** Agent Tool 不得读写授权记录，授权记录只能由界面确认通道写入。未注册工具不得自动放行：只读模式拒绝，其余模式转人工确认；禁用能力与策略拒绝不可被工具声明或自动审批路径绕过。
 9. **Domain Contract / IPC Contract 默认视为 Frozen Contract。** AI 不得
    为实现当前任务擅自修改。如发现契约与架构基线、现有代码或数据库设计
    存在冲突：
