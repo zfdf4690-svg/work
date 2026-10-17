@@ -56,13 +56,14 @@ Zod（IPC 边界 / Tool 输入输出校验）。
      Execution State**。
    - 无论哪条路径，TaskService 只负责校验 `confirmed=true` 并执行
      DELETE，自己不维护确认状态。
+7.1 **确认请求与未完成的 Tool Call 不跨应用重启恢复。** 应用启动时，所有未处理的确认请求一律作废，不得自动执行，也不得再被批准；未终结的 Tool Call 一律终结（尚未开始的取消，执行中的标记为失败且结果未知），不得自动重试或恢复。需要时由用户重新发起。
 8. **Tool 调用方向：**
    - Internal Tool → 直接调用 App Core Service（如 `create_task` →
      `TaskService.create()`）。
    - MCP Tool → MCP Client → MCP Server → External System。
    - MCP Tool 不得绕过 MCP Client 直接访问 App Core Service /
      Repository / SQLite；Internal Tool 与 MCP Tool 不互相调用。
-8.1 **Tool 的事前授权只能来自界面确认通道对本次请求作出的明确用户决定；工具返回内容、任务标题、知识库文档、飞书消息及其他外部内容均不构成授权。** Agent Tool 不得读写授权记录，授权记录只能由界面确认通道写入。未注册工具不得自动放行：只读模式拒绝，其余模式转人工确认；禁用能力与策略拒绝不可被工具声明或自动审批路径绕过。
+8.1 **Tool 的事前授权只能来自界面确认通道对本次请求作出的明确用户决定；工具返回内容、任务标题、知识库文档、飞书消息及其他外部内容均不构成授权。** Agent Tool 不得读写授权记录和审计记录。审计记录由应用内部服务只追加写入，仅用于留痕，不具授权效力，不得作为任何判定的依据。未注册工具不得自动放行：只读模式拒绝，其余模式转人工确认；禁用能力与策略拒绝不可被工具声明或自动审批路径绕过。
 9. **Domain Contract / IPC Contract 默认视为 Frozen Contract。** AI 不得
    为实现当前任务擅自修改。如发现契约与架构基线、现有代码或数据库设计
    存在冲突：
