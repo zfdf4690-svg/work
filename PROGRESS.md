@@ -1,6 +1,6 @@
 # 项目进度 · PHASE 3 交接文档
 
-> 最后更新：2026-10-11（PHASE 3-H 后独立 UI 与 Electron 安全补丁已同步记录）
+> 最后更新：2026-10-17（Tool 权限契约与 Task 工具元数据已同步记录）
 > 新会话接手时：**先读本文件，再读 `AGENTS.md` 和 `.pi/skills/backend-task-pipeline/SKILL.md`**
 
 ---
@@ -8,7 +8,7 @@
 ## 1. 当前阶段
 
 **已完成**：PHASE 3-A0 ✅ ACCEPTED；PHASE 3-A ✅ ACCEPTED & COMMITTED（`4f3fb8e`）；PHASE 3-B ✅ ACCEPTED & COMMITTED（`8b41171`）；PHASE 3-C ✅ ACCEPTED & COMMITTED（`05057dc`）；PHASE 3-D ✅ ACCEPTED & COMMITTED（`3dbbdfd`）：TaskService 已切到 SQLite Repository；PHASE 3-E ✅ ACCEPTED & COMMITTED（`8766223`）；PHASE 3-F ✅ ACCEPTED & COMMITTED（`5ca8015`）；PHASE 3-G ✅ ACCEPTED & COMMITTED（`a363188`）。
-**当前状态**：PHASE 3-H ✅ ACCEPTED & COMMITTED（`32538d5`）：Renderer Task 闭环通过 `src/api/` 适配层接入 IPC，后端零改动；真实 Electron 验收通过。PHASE 3-H 后，首页工作台仪表盘第一期由 AI Studio 完成（`19ab74d`），仅前端 Renderer 改动；Electron 外链与 `will-navigate` 白名单独立补丁已完成。未获明确授权前不得开始下一阶段。
+**当前状态**：PHASE 3-H ✅ ACCEPTED & COMMITTED（`32538d5`）：Renderer Task 闭环通过 `src/api/` 适配层接入 IPC，后端零改动；真实 Electron 验收通过。PHASE 3-H 后，首页工作台仪表盘第一期由 AI Studio 完成（`19ab74d`），仅前端 Renderer 改动；Electron 外链与 `will-navigate` 白名单独立补丁已完成。Tool 权限契约与 Task 工具元数据已提交（`d537757`、`5d83934`、`08e17b4`）；当前没有可执行的 Agent Tool，仅有权限元数据与判定函数。未获明确授权前不得开始下一阶段。
 
 ## 2. 环境与仓库关键事实
 
@@ -20,7 +20,7 @@
 - migration：轻量 `MigrationRunner` 已建，tracking 为 `schema_migrations`；dev/packaged 均使用隔离临时 userData 验证
 - 验证全绿：lint/typecheck、smoke:core、smoke:test、Vite build、migration smoke、Repository CRUD/mapping/filter/count/delete/error tests。Vite build 有 >500 KB chunk 提示
 - Electron 44.4.5 二进制已补齐（npm postinstall 曾未下载 dist/，手动下载 + SHA256 校验）
-- git：3-C 实现 commit `05057dc`；历史换行符 churn 仍在；`.pi/` 未跟踪且未纳入阶段提交；`.env*` 已被 .gitignore 忽略
+- git：3-C 实现 commit `05057dc`；历史换行符 churn 仍在；`.pi/skills/backend-task-pipeline/` 已于 `28b18a5` 纳入版本控制；`.env*` 已被 .gitignore 忽略
 - 锁文件事故：仪表盘提交 `19ab74d` 中误删 `package-lock.json`，已由 `3c18463` 恢复。锁文件当前存在，但所有 `resolved` 地址指向 `registry.npmmirror.com`；无法访问该镜像时 `npm ci` 会失败。
 - 一键启动：`start-app.cmd`（双击：构建→vite@3123→Electron；关窗自动清理）
 
@@ -86,8 +86,8 @@
 - **当前能力边界**：当前没有可执行的 Agent Tool，仅有权限元数据与判定函数。
 - **权限元数据边界**：权限元数据采用独立 sidecar（`ToolMetadata`），以工具名关联，不替换或扩展既有 `ToolDefinition`。
 - **偏离与裁决**：`registerTool` 返回冻结后的 `ToolMetadata`；`listTools` 曾返回可变数组类型，现已收紧为只读数组并继续返回副本；`batchEscalateAbove` 增加非负整数校验。
-- **审查修复**：禁用能力增加 `authz.read`；未注册工具在 `interactive` 下标记 `humanOnly`；工具名不匹配按未注册工具处理；批量工具遇到非法 `affectedCount` 时转人工确认。
+- **审查修复**：提交 `33fc344` 增加禁用能力 `authz.read`；未注册工具在 `interactive` 下标记 `humanOnly`；工具名不匹配按未注册工具处理；批量工具遇到非法 `affectedCount` 时转人工确认。
 - **尚未由运行时证明**：授权只能来自界面确认通道，策略拒绝不可被自动审批绕过；Runtime 与确认通道尚未接入，目前只是契约意图和类型注释。
-- **后续 Runtime 接入约束**：必须先通过 `getTool(name)` 获取元数据，再传入 `evaluateToolCall`；批量工具必须按参数计算并传入真实 `affectedCount`。`evaluateToolCall` 的 `affectedCount` 缺省按 1；批量工具的 Runtime 必须传入真实条数，不能依赖缺省值。
+- **后续 Runtime 接入约束**：必须先通过 `getTool(name)` 获取元数据，再传入 `evaluateToolCall`；`affectedCount` 缺省按 1，批量工具的 Runtime 必须按参数计算并传入真实条数，不能依赖缺省值。
 - **后续查询实现约束**：实现 `list_tasks` 查询时，`all` 必须与仪表盘「全部」同口径并排除 `CANCELLED`；现有 `TaskService.listTasks` 通用查询不能直接视为该口径的实现。
-- **参考文档**：`.pi/skills/backend-task-pipeline/` 下的参考文档本轮已同步更新，计划随提交⑥纳入版本控制。
+- **参考文档**：`.pi/skills/backend-task-pipeline/` 下的参考文档本轮已同步更新，并已随提交 `28b18a5` 纳入版本控制。
