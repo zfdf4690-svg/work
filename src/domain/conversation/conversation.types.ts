@@ -4,7 +4,6 @@
  */
 
 import { TaskSummary } from '../task/task.types';
-import { ToolCall } from '../tool/tool.types';
 
 export interface FileReference {
   id: string;
@@ -30,14 +29,16 @@ export interface ContextSnapshot {
 }
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
+export type MessageKind = 'text' | 'tool_call' | 'tool_result' | 'confirmation' | 'error';
 
 export interface ConversationMessage {
   id: string;
   conversationId: string;
+  sequence: number;
   role: MessageRole;
+  kind: MessageKind;
   content: string;
-  toolCalls?: ToolCall[];
-  contextSnapshot?: ContextSnapshot;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 

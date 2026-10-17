@@ -18,6 +18,14 @@ import { MigrationRunner } from '../../core/db/migrationRunner';
 export const DATABASE_FILE_NAME = 'data.db';
 
 let databaseManager: DatabaseManager | null = null;
+export type ConversationDatabaseAvailability =
+  | { available: true; error: null }
+  | { available: false; error: string };
+
+let conversationDatabaseAvailability: ConversationDatabaseAvailability = {
+  available: false,
+  error: 'Conversation database initialization has not completed',
+};
 
 /** 基于 Electron userData 目录解析数据库文件绝对路径 */
 export function resolveDatabasePath(): string {
@@ -33,18 +41,40 @@ export async function initializeDatabase(): Promise<DatabaseManager> {
     return databaseManager;
   }
 
-  databaseManager = new DatabaseManager({ databasePath: resolveDatabasePath() });
-  await databaseManager.init();
+  const manager = new DatabaseManager({ databasePath: resolveDatabasePath() });
+  databaseManager = manager;
+  conversationDatabaseAvailability = {
+    available: false,
+    error: 'Conversation database initialization has not completed',
+  };
 
-  const migrationResult = new MigrationRunner(
-    databaseManager.getConnection(),
-    path.join(app.getAppPath(), 'migrations')
-  ).run();
+  try {
+    await manager.init();
+    const migrationRunner = new MigrationRunner(
+      manager.getConnection(),
+      path.join(app.getAppPath(), 'migrations')
+    );
+
+    const taskMigrationResult = migrationRunner.run(['001_init.sql']);
+    console.log(
+      `[Database] task migrations applied=${taskMigrationResult.applied.length}, skipped=${taskMigrationResult.skipped.length}`
+    );
+
+    try {
+      migrationRunner.run(['002_conversations.sql']);
+      conversationDatabaseAvailability = { available: true, error: null };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      conversationDatabaseAvailability = { available: false, error: message };
+      console.error('[Database] Conversation initialization failed; Task remains available', error);
+    }
+  } catch (error) {
+    databaseManager = null;
+    await manager.close();
+    throw error;
+  }
 
   console.log(`[Database] initialized: ${databaseManager.getDatabasePath()}`);
-  console.log(
-    `[Database] migrations applied=${migrationResult.applied.length}, skipped=${migrationResult.skipped.length}`
-  );
   return databaseManager;
 }
 
@@ -56,11 +86,19 @@ export function getDatabaseManager(): DatabaseManager {
   return databaseManager;
 }
 
+export function getConversationDatabaseAvailability(): ConversationDatabaseAvailability {
+  return conversationDatabaseAvailability;
+}
+
 /** 关闭数据库连接（幂等）。better-sqlite3 close 为同步执行。 */
 export async function closeDatabase(): Promise<void> {
   if (!databaseManager) return;
   const manager = databaseManager;
   databaseManager = null;
   await manager.close();
+  conversationDatabaseAvailability = {
+    available: false,
+    error: 'Conversation database is closed',
+  };
   console.log('[Database] closed');
 }

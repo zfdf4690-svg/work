@@ -24,6 +24,7 @@ export type Mode = 'discuss' | 'interactive';
 export type ToolSource = 'internal' | 'mcp';
 export type ConfirmPolicy = 'none' | 'always';
 export type Provenance = 'auto' | 'pending' | 'denied-by-policy';
+export type ConfirmationState = 'not_required' | 'pending' | 'approved' | 'denied' | 'expired';
 
 /**
  * Planned list_tasks status filter only: all excludes CANCELLED; default limit
@@ -59,11 +60,15 @@ export interface EvaluateInput {
 }
 
 export interface AuditRecord {
+  id: string;
+  toolCallIdSnapshot: string | null;
+  requestIdSnapshot: string | null;
+  conversationIdSnapshot: string | null;
   toolName: string;
+  runId: string | null;
   decision: Decision;
-  userChoice: 'approve' | 'deny' | 'not_required';
-  timestamp: number;
-  runId: string;
+  userChoice: 'approve' | 'deny' | 'expired' | null;
+  createdAt: string;
 }
 
 /**
@@ -96,12 +101,18 @@ export interface ToolDefinition<TInput = Record<string, unknown>> {
 
 export interface ToolCall {
   toolCallId: string;
+  conversationId: string;
   runId: string;
   toolName: string;
   arguments: Record<string, unknown>;
+  requestId: string | null;
+  confirmationState: ConfirmationState;
+  decision: Decision;
   status: ToolCallStatus;
   result?: unknown;
-  error?: string;
-  startedAt: string;
+  errorText?: string;
+  createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
   completedAt?: string;
 }

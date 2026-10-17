@@ -22,8 +22,22 @@ export class MigrationRunner {
     }
   }
 
-  public run(): MigrationRunResult {
-    const migrations = this.getMigrationFiles();
+  public run(migrationNames?: readonly string[]): MigrationRunResult {
+    const allMigrations = this.getMigrationFiles();
+    let migrations = allMigrations;
+    if (migrationNames) {
+      const requested = new Set(migrationNames);
+      if (requested.size !== migrationNames.length) {
+        throw new Error('[MigrationRunner] migration 名称不能重复');
+      }
+      const availableNames = new Set(allMigrations.map((migration) => migration.name));
+      const unknownNames = migrationNames.filter((name) => !availableNames.has(name));
+      if (unknownNames.length > 0) {
+        throw new Error(`[MigrationRunner] 未知 migration: ${unknownNames.join(', ')}`);
+      }
+      migrations = allMigrations.filter((migration) => requested.has(migration.name));
+    }
+
     const appliedMigrations = new Set(this.getAppliedMigrations());
     const applied: string[] = [];
     const skipped: string[] = [];
