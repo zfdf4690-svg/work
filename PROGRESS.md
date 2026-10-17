@@ -76,3 +76,18 @@
 - **外链默认浏览器补丁**：`setWindowOpenHandler` 仅把 `http:` / `https:` URL 交给 `openExternal`，其他协议拒绝；Electron 窗口始终返回 `deny`。`security.ts` 不导入 `electron`，由 `main/index.ts` 注入回调。真实 Electron 验证使用 spy 验证回调；用户已手动确认系统默认浏览器能够拉起。
 - **`will-navigate` 白名单修复**：先用 `URL` 解析，仅放行 `file:` 与 `localhost` 开发服务器端口（默认 `3000`），移除 `app://` 放行。
 - **遗留与后续**：`file:` 导航当前整体放行；未设置 `VITE_DEV_SERVER_URL` 时默认放行 `localhost:3000`。仪表盘第二期待办为主题系统与 Apple 简约风；第三期为真实天气与定位。
+
+## 9. Tool 权限契约与 Task 工具元数据
+
+- **类型命名**：原调用来源类型改名为 `ToolInvocationSource`（`assistant` / `floating_ball` / `dashboard` / `system`）；Tool 元数据中的 `ToolSource` 表示工具来源（`internal` / `mcp`），两者含义不同。
+- **权限契约**：提交 `5d83934` 增加纯 TypeScript 的权限元数据、风险判定与注册校验；`smoke:core` 覆盖契约单元测试。
+- **Task 元数据**：提交 `08e17b4` 显式注册 `get_task`、`list_tasks`、`create_task`、`update_task`、`complete_task`、`delete_task` 的权限元数据；不执行工具操作。
+- **list_tasks 约定**：状态键为 `all`、`pending`、`in_progress`、`completed`；`all` 排除 `CANCELLED`；默认 limit 为 50，上限为 100。`get_task` 元数据约定可查询 `CANCELLED` 任务。这些是契约元数据，不是已实现的查询行为。
+- **当前能力边界**：当前没有可执行的 Agent Tool，仅有权限元数据与判定函数。
+- **权限元数据边界**：权限元数据采用独立 sidecar（`ToolMetadata`），以工具名关联，不替换或扩展既有 `ToolDefinition`。
+- **偏离与裁决**：`registerTool` 返回冻结后的 `ToolMetadata`；`listTools` 曾返回可变数组类型，现已收紧为只读数组并继续返回副本；`batchEscalateAbove` 增加非负整数校验。
+- **审查修复**：禁用能力增加 `authz.read`；未注册工具在 `interactive` 下标记 `humanOnly`；工具名不匹配按未注册工具处理；批量工具遇到非法 `affectedCount` 时转人工确认。
+- **尚未由运行时证明**：授权只能来自界面确认通道，策略拒绝不可被自动审批绕过；Runtime 与确认通道尚未接入，目前只是契约意图和类型注释。
+- **后续 Runtime 接入约束**：必须先通过 `getTool(name)` 获取元数据，再传入 `evaluateToolCall`；批量工具必须按参数计算并传入真实 `affectedCount`。`evaluateToolCall` 的 `affectedCount` 缺省按 1；批量工具的 Runtime 必须传入真实条数，不能依赖缺省值。
+- **后续查询实现约束**：实现 `list_tasks` 查询时，`all` 必须与仪表盘「全部」同口径并排除 `CANCELLED`；现有 `TaskService.listTasks` 通用查询不能直接视为该口径的实现。
+- **参考文档**：`.pi/skills/backend-task-pipeline/` 下的参考文档本轮已同步更新，计划随提交⑥纳入版本控制。
