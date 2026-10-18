@@ -49,6 +49,34 @@ function insertConversation(database: ReturnType<DatabaseManager['getConnection'
   `).run(id, `Conversation ${id}`, timestamp, timestamp);
 }
 
+function insertMessage(
+  database: ReturnType<DatabaseManager['getConnection']>,
+  id: string,
+  conversationId: string,
+  sequence: number,
+  overrides: {
+    role?: string;
+    kind?: string;
+    content?: string;
+    contextSnapshotJson?: string | null;
+  } = {}
+): void {
+  database.prepare(`
+    INSERT INTO conversation_messages (
+      id, conversation_id, sequence, role, kind, content, context_snapshot_json, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    conversationId,
+    sequence,
+    overrides.role ?? 'user',
+    overrides.kind ?? 'text',
+    overrides.content ?? 'message',
+    overrides.contextSnapshotJson ?? null,
+    timestamp
+  );
+}
+
 function insertToolCall(
   database: ReturnType<DatabaseManager['getConnection']>,
   id: string,
@@ -61,7 +89,7 @@ function insertToolCall(
     tool_name: 'get_task',
     arguments_json: '{}',
     result_json: null,
-    run_id: null,
+    run_id: `run-${id}`,
     request_id: null,
     status: 'PENDING',
     confirmation_state: 'not_required',
@@ -97,17 +125,33 @@ function insertAudit(
   database: ReturnType<DatabaseManager['getConnection']>,
   id: string,
   toolCallId: string,
-  userChoice: 'approve' | 'deny' | 'expired'
+  userChoice: string | null,
+  options: {
+    runId?: string | null;
+    approvalOrigin?: string | null;
+    decisionAllowed?: number;
+    decisionNeedsUser?: number;
+    decisionProvenance?: string;
+  } = {}
 ): void {
+  const needsUser = userChoice !== 'not_required' && userChoice !== null;
+  const decisionAllowed = options.decisionAllowed ?? (needsUser ? 0 : 1);
+  const decisionNeedsUser = options.decisionNeedsUser ?? (needsUser ? 1 : 0);
+  const decisionProvenance = options.decisionProvenance ?? (needsUser ? 'pending' : 'auto');
+  const approvalOrigin = options.approvalOrigin === undefined
+    ? (userChoice === 'approve' || userChoice === 'deny' ? 'ui' : null)
+    : options.approvalOrigin;
   database.prepare(`
     INSERT INTO audit_records (
       id, tool_call_id_snapshot, request_id_snapshot, conversation_id_snapshot, tool_name, run_id,
       decision_allowed, decision_needs_user, decision_human_only, decision_reason,
-      decision_rule, decision_provenance, user_choice, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      decision_rule, decision_provenance, user_choice, approval_origin, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    id, toolCallId, `request-${toolCallId}`, `conversation-${toolCallId}`, 'create_task', 'run-1',
-    0, 1, 0, 'waiting for user', 'confirmation-required', 'pending', userChoice, timestamp
+    id, toolCallId, `request-${toolCallId}`, `conversation-${toolCallId}`, 'create_task',
+    options.runId === undefined ? 'run-1' : options.runId,
+    decisionAllowed, decisionNeedsUser, 0, 'audit decision', 'test-rule', decisionProvenance,
+    userChoice, approvalOrigin, timestamp
   );
 }
 
@@ -120,6 +164,51 @@ function expectDatabaseRejection(action: () => unknown, label: string): void {
 function runConversationConstraintTests(database: SmokeDatabase): void {
   insertConversation(database, 'conversation-constraints');
   insertConversation(database, 'conversation-request-target');
+
+  const missingRequestIdCases: Array<{
+    state: string;
+    status: string;
+    label: string;
+  }> = [
+    { state: 'pending', status: 'PENDING', label: 'pending' },
+    { state: 'approved', status: 'PENDING', label: 'approved' },
+    { state: 'denied', status: 'CANCELLED', label: 'denied' },
+    { state: 'expired', status: 'CANCELLED', label: 'expired' },
+  ];
+  for (const { state, status, label } of missingRequestIdCases) {
+    expectDatabaseRejection(
+      () => insertToolCall(database, `call-${label}-without-request-id`, 'conversation-constraints', {
+        decision_allowed: 0,
+        decision_needs_user: 1,
+        decision_provenance: 'pending',
+        confirmation_state: state,
+        status,
+      }),
+      `${label} confirmation requires a request ID`
+    );
+  }
+
+  insertToolCall(database, 'call-null-request-one', 'conversation-constraints');
+  insertToolCall(database, 'call-null-request-two', 'conversation-constraints');
+  console.log('[MigrationSmoke] null request IDs remain non-unique');
+
+  insertToolCall(database, 'call-request-id-first', 'conversation-constraints', {
+    request_id: 'request-unique',
+    decision_allowed: 0,
+    decision_needs_user: 1,
+    decision_provenance: 'pending',
+    confirmation_state: 'pending',
+  });
+  expectDatabaseRejection(
+    () => insertToolCall(database, 'call-request-id-duplicate', 'conversation-constraints', {
+      request_id: 'request-unique',
+      decision_allowed: 0,
+      decision_needs_user: 1,
+      decision_provenance: 'pending',
+      confirmation_state: 'pending',
+    }),
+    'request IDs are unique when present'
+  );
 
   expectDatabaseRejection(
     () => insertToolCall(database, 'call-needs-user-invalid', 'conversation-constraints', {
@@ -143,6 +232,7 @@ function runConversationConstraintTests(database: SmokeDatabase): void {
       decision_needs_user: 1,
       confirmation_state: 'pending',
       decision_provenance: 'pending',
+      request_id: 'request-call-running-invalid',
     }),
     'an unapproved call cannot run'
   );
@@ -153,11 +243,111 @@ function runConversationConstraintTests(database: SmokeDatabase): void {
       decision_needs_user: 1,
       confirmation_state: 'pending',
       decision_provenance: 'pending',
+      request_id: 'request-call-success-invalid',
     }),
     'an unapproved call cannot succeed'
   );
+  expectDatabaseRejection(
+    () => insertToolCall(database, 'call-pending-status-invalid', 'conversation-constraints', {
+      status: 'FAILED',
+      decision_allowed: 0,
+      decision_needs_user: 1,
+      confirmation_state: 'pending',
+      decision_provenance: 'pending',
+      request_id: 'request-pending-status-invalid',
+    }),
+    'a pending confirmation must have PENDING status'
+  );
+  for (const state of ['denied', 'expired']) {
+    expectDatabaseRejection(
+      () => insertToolCall(database, `call-${state}-status-invalid`, 'conversation-constraints', {
+        status: 'PENDING',
+        decision_allowed: 0,
+        decision_needs_user: 1,
+        confirmation_state: state,
+        decision_provenance: 'pending',
+        request_id: `request-${state}-status-invalid`,
+      }),
+      `${state} confirmation must have CANCELLED status`
+    );
+  }
+  expectDatabaseRejection(
+    () => insertToolCall(database, 'call-allowed-needs-user-invalid', 'conversation-constraints', {
+      request_id: 'request-allowed-needs-user-invalid',
+      decision_allowed: 1,
+      decision_needs_user: 1,
+      confirmation_state: 'pending',
+      decision_provenance: 'pending',
+    }),
+    'a decision cannot be both allowed and requiring a user'
+  );
+  expectDatabaseRejection(
+    () => insertToolCall(database, 'call-null-run-id', 'conversation-constraints', {
+      run_id: null,
+    }),
+    'ToolCall run_id is required'
+  );
+
+  const validDecisionCases = [
+    {
+      id: 'call-decision-auto-valid',
+      decision_allowed: 1,
+      decision_needs_user: 0,
+      decision_provenance: 'auto',
+      confirmation_state: 'not_required',
+      status: 'PENDING',
+    },
+    {
+      id: 'call-decision-pending-valid',
+      decision_allowed: 0,
+      decision_needs_user: 1,
+      decision_provenance: 'pending',
+      confirmation_state: 'pending',
+      request_id: 'request-call-decision-pending-valid',
+      status: 'PENDING',
+    },
+    {
+      id: 'call-decision-policy-valid',
+      decision_allowed: 0,
+      decision_needs_user: 0,
+      decision_provenance: 'denied-by-policy',
+      confirmation_state: 'not_required',
+      status: 'CANCELLED',
+    },
+  ];
+  for (const decisionCase of validDecisionCases) {
+    insertToolCall(database, decisionCase.id, 'conversation-constraints', decisionCase);
+  }
+  console.log('[MigrationSmoke] all three ToolCall decision combinations are accepted');
+  const invalidDecisionCases = [
+    { allowed: 1, needsUser: 0, provenance: 'pending', label: 'allowed with pending provenance' },
+    { allowed: 1, needsUser: 0, provenance: 'denied-by-policy', label: 'allowed with policy-denied provenance' },
+    { allowed: 1, needsUser: 1, provenance: 'auto', label: 'allowed while requiring user' },
+    { allowed: 1, needsUser: 1, provenance: 'pending', label: 'allowed and pending' },
+    { allowed: 1, needsUser: 1, provenance: 'denied-by-policy', label: 'allowed and policy denied' },
+    { allowed: 0, needsUser: 0, provenance: 'auto', label: 'denied without policy provenance' },
+    { allowed: 0, needsUser: 0, provenance: 'pending', label: 'denied with pending provenance' },
+    { allowed: 0, needsUser: 1, provenance: 'auto', label: 'pending decision with automatic provenance' },
+    { allowed: 0, needsUser: 1, provenance: 'denied-by-policy', label: 'pending decision with policy-denied provenance' },
+  ];
+  for (let index = 0; index < invalidDecisionCases.length; index += 1) {
+    const decisionCase = invalidDecisionCases[index]!;
+    const needsUser = decisionCase.needsUser;
+    expectDatabaseRejection(
+      () => insertToolCall(database, `call-invalid-decision-${index}`, 'conversation-constraints', {
+        decision_allowed: decisionCase.allowed,
+        decision_needs_user: needsUser,
+        decision_provenance: decisionCase.provenance,
+        confirmation_state: needsUser ? 'pending' : 'not_required',
+        request_id: needsUser ? `request-invalid-decision-${index}` : null,
+        status: decisionCase.allowed || needsUser ? 'PENDING' : 'CANCELLED',
+      }),
+      `ToolCall rejects ${decisionCase.label}`
+    );
+  }
 
   insertToolCall(database, 'call-expired-transition', 'conversation-constraints', {
+    request_id: 'request-call-expired-transition',
     decision_needs_user: 1,
     decision_allowed: 0,
     decision_provenance: 'pending',
@@ -176,6 +366,7 @@ function runConversationConstraintTests(database: SmokeDatabase): void {
   );
 
   insertToolCall(database, 'call-denied-transition', 'conversation-constraints', {
+    request_id: 'request-call-denied-transition',
     decision_needs_user: 1,
     decision_allowed: 0,
     decision_provenance: 'pending',
@@ -194,6 +385,8 @@ function runConversationConstraintTests(database: SmokeDatabase): void {
   );
 
   insertToolCall(database, 'call-approved-expiration', 'conversation-constraints', {
+    request_id: 'request-call-approved-expiration',
+    decision_allowed: 0,
     decision_needs_user: 1,
     decision_provenance: 'pending',
     confirmation_state: 'pending',
@@ -202,7 +395,9 @@ function runConversationConstraintTests(database: SmokeDatabase): void {
     UPDATE tool_calls SET confirmation_state = 'approved' WHERE id = 'call-approved-expiration'
   `).run();
   database.prepare(`
-    UPDATE tool_calls SET confirmation_state = 'expired' WHERE id = 'call-approved-expiration'
+    UPDATE tool_calls
+    SET confirmation_state = 'expired', status = 'CANCELLED'
+    WHERE id = 'call-approved-expiration'
   `).run();
   assert.equal(
     (database.prepare(`
@@ -254,6 +449,60 @@ function runConversationConstraintTests(database: SmokeDatabase): void {
     );
   }
 
+  insertToolCall(database, 'call-no-request-immutable', 'conversation-constraints');
+  const noRequestImmutableUpdates: Array<[string, string | number | null]> = [
+    ['arguments_json', '{"changed":true}'],
+    ['decision_allowed', 0],
+    ['decision_needs_user', 1],
+    ['decision_human_only', 1],
+    ['decision_reason', 'changed'],
+    ['decision_rule', 'changed'],
+    ['decision_provenance', 'pending'],
+  ];
+  for (const [column, value] of noRequestImmutableUpdates) {
+    expectDatabaseRejection(
+      () => database.prepare(`UPDATE tool_calls SET ${column} = ? WHERE id = ?`)
+        .run(value, 'call-no-request-immutable'),
+      `requestless ${column} must be immutable`
+    );
+  }
+  console.log('[MigrationSmoke] requestless arguments and decision metadata are immutable');
+
+  insertToolCall(database, 'call-mutable-state', 'conversation-constraints', {
+    request_id: 'request-call-mutable-state',
+    decision_allowed: 0,
+    decision_needs_user: 1,
+    decision_provenance: 'pending',
+    confirmation_state: 'pending',
+  });
+  database.prepare(`
+    UPDATE tool_calls SET confirmation_state = 'approved' WHERE id = 'call-mutable-state'
+  `).run();
+  database.prepare(`
+    UPDATE tool_calls SET status = 'RUNNING' WHERE id = 'call-mutable-state'
+  `).run();
+  database.prepare(`
+    UPDATE tool_calls SET result_json = '{"ok":true}', error_text = 'cleared', updated_at = ?
+    WHERE id = 'call-mutable-state'
+  `).run('2026-10-05T00:00:00.000Z');
+  database.prepare(`
+    UPDATE tool_calls SET status = 'SUCCESS' WHERE id = 'call-mutable-state'
+  `).run();
+  assert.equal(
+    (database.prepare(`
+      SELECT status, confirmation_state, result_json, error_text, updated_at
+      FROM tool_calls WHERE id = 'call-mutable-state'
+    `).get() as {
+      status: string;
+      confirmation_state: string;
+      result_json: string;
+      error_text: string;
+      updated_at: string;
+    }).status,
+    'SUCCESS'
+  );
+  console.log('[MigrationSmoke] mutable ToolCall execution fields remain updateable');
+
   insertToolCall(database, 'call-audit', 'conversation-constraints', {
     request_id: 'request-call-audit',
     decision_allowed: 0,
@@ -267,6 +516,128 @@ function runConversationConstraintTests(database: SmokeDatabase): void {
     () => insertAudit(database, 'audit-expired-duplicate', 'call-audit', 'expired'),
     'the same audit outcome cannot be appended twice'
   );
+  const validAuditDecisionCases = [
+    {
+      callId: 'call-audit-decision-auto',
+      choice: 'not_required',
+      decisionAllowed: 1,
+      decisionNeedsUser: 0,
+      decisionProvenance: 'auto',
+    },
+    {
+      callId: 'call-audit-decision-pending',
+      choice: 'approve',
+      decisionAllowed: 0,
+      decisionNeedsUser: 1,
+      decisionProvenance: 'pending',
+    },
+    {
+      callId: 'call-audit-decision-policy',
+      choice: 'not_required',
+      decisionAllowed: 0,
+      decisionNeedsUser: 0,
+      decisionProvenance: 'denied-by-policy',
+    },
+  ] as const;
+  for (const [index, decisionCase] of validAuditDecisionCases.entries()) {
+    insertAudit(database, `audit-valid-decision-${index}`, decisionCase.callId, decisionCase.choice, {
+      decisionAllowed: decisionCase.decisionAllowed,
+      decisionNeedsUser: decisionCase.decisionNeedsUser,
+      decisionProvenance: decisionCase.decisionProvenance,
+    });
+  }
+  console.log('[MigrationSmoke] all three audit decision combinations are accepted');
+  for (let index = 0; index < invalidDecisionCases.length; index += 1) {
+    const decisionCase = invalidDecisionCases[index]!;
+    const needsUser = decisionCase.needsUser;
+    expectDatabaseRejection(
+      () => insertAudit(
+        database,
+        `audit-invalid-decision-${index}`,
+        `call-audit-invalid-decision-${index}`,
+        needsUser ? 'approve' : 'not_required',
+        {
+          decisionAllowed: decisionCase.allowed,
+          decisionNeedsUser: needsUser,
+          decisionProvenance: decisionCase.provenance,
+        }
+      ),
+      `audit rejects ${decisionCase.label}`
+    );
+  }
+  for (const choice of ['approve', 'deny', 'expired'] as const) {
+    expectDatabaseRejection(
+      () => insertAudit(database, `audit-${choice}-without-user-need`, `call-audit-${choice}-without-user-need`, choice, {
+        decisionAllowed: 0,
+        decisionNeedsUser: 0,
+        decisionProvenance: 'denied-by-policy',
+      }),
+      `${choice} audit requires decision_needs_user`
+    );
+  }
+  expectDatabaseRejection(
+    () => insertAudit(
+      database,
+      'audit-not-required-with-user-need',
+      'call-audit-not-required-with-user-need',
+      'not_required',
+      {
+        decisionAllowed: 0,
+        decisionNeedsUser: 1,
+        decisionProvenance: 'pending',
+      }
+    ),
+    'not_required audit forbids decision_needs_user'
+  );
+  expectDatabaseRejection(
+    () => insertAudit(database, 'audit-null-choice', 'call-audit-null-choice', null),
+    'audit user_choice is required'
+  );
+  expectDatabaseRejection(
+    () => insertAudit(database, 'audit-empty-choice', 'call-audit-empty-choice', ''),
+    'empty audit user_choice is invalid'
+  );
+  expectDatabaseRejection(
+    () => insertAudit(database, 'audit-approve-without-origin', 'call-audit-no-approve-origin', 'approve', {
+      approvalOrigin: null,
+    }),
+    'approve audit requires UI origin'
+  );
+  expectDatabaseRejection(
+    () => insertAudit(database, 'audit-deny-without-origin', 'call-audit-no-deny-origin', 'deny', {
+      approvalOrigin: null,
+    }),
+    'deny audit requires UI origin'
+  );
+  for (const choice of ['expired', 'not_required'] as const) {
+    expectDatabaseRejection(
+      () => insertAudit(database, `audit-${choice}-with-origin`, `call-audit-${choice}-origin`, choice, {
+        approvalOrigin: 'ui',
+      }),
+      `${choice} audit cannot claim UI approval origin`
+    );
+  }
+  expectDatabaseRejection(
+    () => insertAudit(database, 'audit-invalid-origin', 'call-audit-invalid-origin', 'approve', {
+      approvalOrigin: 'automatic',
+    }),
+    'audit approval origin must be ui'
+  );
+  for (const choice of ['approve', 'deny', 'not_required'] as const) {
+    const callId = `call-audit-duplicate-${choice}`;
+    insertAudit(database, `audit-${choice}-first`, callId, choice);
+    expectDatabaseRejection(
+      () => insertAudit(database, `audit-${choice}-duplicate`, callId, choice),
+      `${choice} audit outcome cannot be appended twice for one call`
+    );
+  }
+  expectDatabaseRejection(
+    () => insertAudit(database, 'audit-null-run-id', 'call-audit-null-run-id', 'approve', {
+      runId: null,
+    }),
+    'audit run_id is required'
+  );
+
   expectDatabaseRejection(
     () => database.prepare(`UPDATE audit_records SET decision_reason = 'changed' WHERE id = ?`)
       .run('audit-approve'),
@@ -279,6 +650,44 @@ function runConversationConstraintTests(database: SmokeDatabase): void {
 
   const callsIndex = database.pragma('index_list(conversation_messages)') as Array<{ name: string }>;
   assert.equal(callsIndex.filter((index) => index.name === 'idx_messages_conversation_sequence').length, 0);
+  const toolCallIndexes = (database.pragma('index_list(tool_calls)') as Array<{ name: string }>)
+    .map((index) => index.name);
+  assert(toolCallIndexes.includes('uq_tool_calls_request_id'));
+  assert(toolCallIndexes.includes('idx_tool_calls_conversation_created'));
+  assert(toolCallIndexes.includes('idx_tool_calls_confirmation_status'));
+  expectDatabaseRejection(
+    () => insertMessage(database, 'message-old-confirmation-kind', 'conversation-constraints', 1, {
+      role: 'assistant',
+      kind: 'confirmation',
+      content: 'data',
+    }),
+    "legacy 'confirmation' message kind is rejected"
+  );
+  const invalidMessageCases: Array<{
+    id: string;
+    contextSnapshotJson: string;
+    label: string;
+  }> = [
+    {
+      id: 'message-invalid-context-json',
+      contextSnapshotJson: '{invalid',
+      label: 'message context snapshot must be valid JSON',
+    },
+    {
+      id: 'message-context-too-large',
+      contextSnapshotJson: JSON.stringify({ value: 'x'.repeat(262145) }),
+      label: 'message context snapshot is limited to 256 KiB',
+    },
+  ];
+  for (const testCase of invalidMessageCases) {
+    expectDatabaseRejection(
+      () => insertMessage(database, testCase.id, 'conversation-constraints', 1, {
+        content: 'data',
+        contextSnapshotJson: testCase.contextSnapshotJson,
+      }),
+      testCase.label
+    );
+  }
 
   expectDatabaseRejection(
     () => database.prepare(`
@@ -305,11 +714,7 @@ function runConversationConstraintTests(database: SmokeDatabase): void {
 
 function runConversationDeletionTests(database: SmokeDatabase): void {
   insertConversation(database, 'conversation-delete');
-  database.prepare(`
-    INSERT INTO conversation_messages (
-      id, conversation_id, sequence, role, kind, content, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run('message-delete', 'conversation-delete', 1, 'user', 'text', 'message', timestamp);
+  insertMessage(database, 'message-delete', 'conversation-delete', 1);
   insertToolCall(database, 'call-delete', 'conversation-delete', {
     request_id: 'request-call-delete',
     decision_allowed: 0,

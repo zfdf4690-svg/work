@@ -29,7 +29,7 @@ export interface ContextSnapshot {
 }
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
-export type MessageKind = 'text' | 'tool_call' | 'tool_result' | 'confirmation' | 'error';
+export type MessageKind = 'text' | 'tool_call' | 'tool_result' | 'confirmation_request' | 'error';
 
 export interface ConversationMessage {
   id: string;

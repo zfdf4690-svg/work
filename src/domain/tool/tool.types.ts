@@ -65,9 +65,10 @@ export interface AuditRecord {
   requestIdSnapshot: string | null;
   conversationIdSnapshot: string | null;
   toolName: string;
-  runId: string | null;
+  runId: string;
   decision: Decision;
-  userChoice: 'approve' | 'deny' | 'expired' | null;
+  userChoice: 'approve' | 'deny' | 'not_required' | 'expired';
+  approvalOrigin: 'ui' | null;
   createdAt: string;
 }
 

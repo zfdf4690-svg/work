@@ -57,7 +57,7 @@ export const toolCallsTable = sqliteTable('tool_calls', {
   toolName: text('tool_name').notNull(),
   argumentsJson: text('arguments_json').notNull(),
   resultJson: text('result_json'),
-  runId: text('run_id'),
+  runId: text('run_id').notNull(),
   requestId: text('request_id'),
   status: text('status').notNull(),
   confirmationState: text('confirmation_state').notNull(),
@@ -72,7 +72,15 @@ export const toolCallsTable = sqliteTable('tool_calls', {
   updatedAt: text('updated_at').notNull(),
   startedAt: text('started_at'),
   completedAt: text('completed_at'),
-});
+}, (table) => [
+  uniqueIndex('uq_tool_calls_request_id')
+    .on(table.requestId)
+    .where(sql`request_id IS NOT NULL`),
+  index('idx_tool_calls_conversation_created').on(table.conversationId, table.createdAt),
+  index('idx_tool_calls_confirmation_status')
+    .on(table.confirmationState, table.status)
+    .where(sql`confirmation_state IN ('pending', 'approved')`),
+]);
 
 export const auditRecordsTable = sqliteTable('audit_records', {
   id: text('id').primaryKey(),
@@ -80,14 +88,15 @@ export const auditRecordsTable = sqliteTable('audit_records', {
   requestIdSnapshot: text('request_id_snapshot'),
   conversationIdSnapshot: text('conversation_id_snapshot'),
   toolName: text('tool_name').notNull(),
-  runId: text('run_id'),
+  runId: text('run_id').notNull(),
   decisionAllowed: integer('decision_allowed', { mode: 'boolean' }).notNull(),
   decisionNeedsUser: integer('decision_needs_user', { mode: 'boolean' }).notNull(),
   decisionHumanOnly: integer('decision_human_only', { mode: 'boolean' }).notNull(),
   decisionReason: text('decision_reason').notNull(),
   decisionRule: text('decision_rule'),
   decisionProvenance: text('decision_provenance').notNull(),
-  userChoice: text('user_choice'),
+  userChoice: text('user_choice').notNull(),
+  approvalOrigin: text('approval_origin'),
   createdAt: text('created_at').notNull(),
 }, (table) => [
   index('idx_audit_records_request_id_snapshot').on(table.requestIdSnapshot),

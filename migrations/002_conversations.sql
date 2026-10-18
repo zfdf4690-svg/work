@@ -20,13 +20,18 @@ CREATE TABLE conversation_messages (
   conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
   sequence INTEGER NOT NULL CHECK (sequence > 0),
   role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
-  kind TEXT NOT NULL CHECK (kind IN ('text', 'tool_call', 'tool_result', 'confirmation', 'error')),
+  kind TEXT NOT NULL CHECK (
+    kind IN ('text', 'tool_call', 'tool_result', 'confirmation_request', 'error')
+  ),
   content TEXT NOT NULL CHECK (length(CAST(content AS BLOB)) <= 1048576),
   metadata_json TEXT CHECK (
     metadata_json IS NULL OR
     (json_valid(metadata_json) AND length(CAST(metadata_json AS BLOB)) <= 262144)
   ),
-  context_snapshot_json TEXT,
+  context_snapshot_json TEXT CHECK (
+    context_snapshot_json IS NULL OR
+    (json_valid(context_snapshot_json) AND length(CAST(context_snapshot_json AS BLOB)) <= 262144)
+  ),
   created_at TEXT NOT NULL,
   UNIQUE (conversation_id, sequence)
 );
@@ -42,7 +47,7 @@ CREATE TABLE tool_calls (
     result_json IS NULL OR
     (json_valid(result_json) AND length(CAST(result_json AS BLOB)) <= 262144)
   ),
-  run_id TEXT,
+  run_id TEXT NOT NULL,
   request_id TEXT,
   status TEXT NOT NULL CHECK (status IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELLED')),
   confirmation_state TEXT NOT NULL CHECK (
@@ -66,13 +71,30 @@ CREATE TABLE tool_calls (
     (decision_needs_user = 0 AND confirmation_state = 'not_required')
   ),
   CHECK (confirmation_state <> 'not_required' OR request_id IS NULL),
+  CHECK (confirmation_state = 'not_required' OR request_id IS NOT NULL),
+  CHECK (confirmation_state <> 'pending' OR status = 'PENDING'),
+  CHECK (confirmation_state NOT IN ('denied', 'expired') OR status = 'CANCELLED'),
+  CHECK (decision_allowed = 0 OR decision_needs_user = 0),
+  CHECK (
+    (decision_allowed = 1 AND decision_needs_user = 0 AND decision_provenance = 'auto') OR
+    (decision_allowed = 0 AND decision_needs_user = 1 AND decision_provenance = 'pending') OR
+    (decision_allowed = 0 AND decision_needs_user = 0 AND decision_provenance = 'denied-by-policy')
+  ),
   CHECK (NOT (decision_allowed = 0 AND decision_needs_user = 0) OR status = 'CANCELLED'),
   CHECK (status NOT IN ('RUNNING', 'SUCCESS') OR decision_allowed = 1 OR confirmation_state = 'approved')
 );
 
+CREATE UNIQUE INDEX uq_tool_calls_request_id
+  ON tool_calls (request_id)
+  WHERE request_id IS NOT NULL;
+CREATE INDEX idx_tool_calls_conversation_created
+  ON tool_calls (conversation_id, created_at);
+CREATE INDEX idx_tool_calls_confirmation_status
+  ON tool_calls (confirmation_state, status)
+  WHERE confirmation_state IN ('pending', 'approved');
+
 CREATE TRIGGER trg_tool_calls_request_immutable
 BEFORE UPDATE ON tool_calls
-WHEN OLD.request_id IS NOT NULL OR NEW.request_id IS NOT NULL
 BEGIN
   SELECT CASE WHEN
     OLD.conversation_id IS NOT NEW.conversation_id OR
@@ -112,7 +134,7 @@ CREATE TABLE audit_records (
   request_id_snapshot TEXT,
   conversation_id_snapshot TEXT,
   tool_name TEXT NOT NULL,
-  run_id TEXT,
+  run_id TEXT NOT NULL,
   decision_allowed INTEGER NOT NULL CHECK (decision_allowed IN (0, 1)),
   decision_needs_user INTEGER NOT NULL CHECK (decision_needs_user IN (0, 1)),
   decision_human_only INTEGER NOT NULL CHECK (decision_human_only IN (0, 1)),
@@ -121,8 +143,22 @@ CREATE TABLE audit_records (
   decision_provenance TEXT NOT NULL CHECK (
     decision_provenance IN ('auto', 'pending', 'denied-by-policy')
   ),
-  user_choice TEXT CHECK (user_choice IS NULL OR user_choice IN ('approve', 'deny', 'expired')),
-  created_at TEXT NOT NULL
+  user_choice TEXT NOT NULL CHECK (
+    user_choice IN ('approve', 'deny', 'not_required', 'expired')
+  ),
+  approval_origin TEXT CHECK (approval_origin IS NULL OR approval_origin = 'ui'),
+  created_at TEXT NOT NULL,
+  CHECK (
+    (user_choice IN ('approve', 'deny') AND approval_origin IS NOT NULL AND approval_origin = 'ui') OR
+    (user_choice IN ('not_required', 'expired') AND approval_origin IS NULL)
+  ),
+  CHECK (user_choice NOT IN ('approve', 'deny', 'expired') OR decision_needs_user = 1),
+  CHECK (user_choice <> 'not_required' OR decision_needs_user = 0),
+  CHECK (
+    (decision_allowed = 1 AND decision_needs_user = 0 AND decision_provenance = 'auto') OR
+    (decision_allowed = 0 AND decision_needs_user = 1 AND decision_provenance = 'pending') OR
+    (decision_allowed = 0 AND decision_needs_user = 0 AND decision_provenance = 'denied-by-policy')
+  )
 );
 
 CREATE INDEX idx_audit_records_request_id_snapshot
