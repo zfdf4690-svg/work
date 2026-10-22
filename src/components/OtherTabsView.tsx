@@ -81,15 +81,25 @@ export const OtherTabsView: React.FC<OtherTabsViewProps> = ({
 
   if (activeTab === 'docs') {
     return (
-      <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6 font-sans">
-        <div className="pb-4 border-b border-white/[0.08]">
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-            <FileText className="w-6 h-6 text-[#FBBF24]" />
-            <span>文稿与文件中心 (Documents & Files)</span>
-          </h2>
-          <p className="text-xs text-[#908fa0] mt-1">
-            管理当前工作关联的 PRD 文档、设计规范图谱及会议纪要草稿
-          </p>
+      <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6 font-sans animate-in fade-in duration-200">
+        <div className="pb-4 border-b border-[var(--glass-border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
+                <FileText className="w-6 h-6 text-[#FBBF24]" />
+                <span>文件中心 (Files)</span>
+              </h2>
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-sky-500/15 border border-sky-500/30 text-sky-300">
+                演示数据 · 待后端接入
+              </span>
+            </div>
+            <p className="text-xs text-[var(--color-text-secondary)] mt-1">
+              管理与当前工作关联的 PRD 文档、设计规范图谱及会议纪要草稿。文件系统待在后续阶段接入沙箱存储。
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-mono text-[var(--color-text-muted)]">
+            <span>存储状态: 只读演示</span>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -99,15 +109,15 @@ export const OtherTabsView: React.FC<OtherTabsViewProps> = ({
             { name: '桌面端毛玻璃视觉规范_Image2.html', size: '1.2 MB', time: '刚才', ext: 'HTML' },
             { name: '腾讯会议方案评审议题.md', size: '18 KB', time: '今天上午', ext: 'MD' },
           ].map((file, idx) => (
-            <div key={idx} className="specular-card rounded-2xl p-4 space-y-2">
+            <div key={idx} className="acrylic-card rounded-2xl p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="px-2 py-0.5 rounded bg-[#FBBF24]/20 text-[#FBBF24] font-mono text-[10px]">
                   {file.ext}
                 </span>
-                <span className="text-[11px] font-mono text-[#908fa0]">{file.size}</span>
+                <span className="text-[11px] font-mono text-[var(--color-text-muted)]">{file.size}</span>
               </div>
-              <div className="text-xs font-semibold text-white truncate">{file.name}</div>
-              <div className="text-[11px] text-[#908fa0] font-mono">更新于 {file.time}</div>
+              <div className="text-xs font-semibold text-[var(--color-text-primary)] truncate">{file.name}</div>
+              <div className="text-[11px] text-[var(--color-text-muted)] font-mono">更新于 {file.time}</div>
             </div>
           ))}
         </div>
@@ -118,12 +128,12 @@ export const OtherTabsView: React.FC<OtherTabsViewProps> = ({
   if (activeTab === 'skills') {
     return (
       <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6 font-sans">
-        <div className="pb-4 border-b border-white/[0.08]">
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+        <div className="pb-4 border-b border-[var(--glass-border)]">
+          <h2 className="text-2xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
             <Wrench className="w-6 h-6 text-[#c0c1ff]" />
             <span>工具 / Agent Skills 注册表</span>
           </h2>
-          <p className="text-xs text-[#908fa0] mt-1">
+          <p className="text-xs text-[var(--color-text-secondary)] mt-1">
             作为复杂任务执行能力，AI 根据用户需求自主决定调用工具或 Agent 能力
           </p>
         </div>
@@ -135,9 +145,9 @@ export const OtherTabsView: React.FC<OtherTabsViewProps> = ({
             { name: 'Agenda & Memo Generator', desc: '对齐企业日程并自动填充标准会议四要素', badge: '活跃', calls: '312次' },
             { name: 'Feishu Task Synchronizer', desc: '经用户二次确认后向飞书多维表格与日程写入待办', badge: '企业就绪', calls: '520次' },
           ].map((s, idx) => (
-            <div key={idx} className="specular-card rounded-2xl p-5 space-y-2">
+            <div key={idx} className="acrylic-card rounded-2xl p-5 space-y-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-white font-semibold text-sm">
+                <div className="flex items-center gap-2 text-[var(--color-text-primary)] font-semibold text-sm">
                   <Cpu className="w-4 h-4 text-[#c0c1ff]" />
                   <span>{s.name}</span>
                 </div>
@@ -145,8 +155,8 @@ export const OtherTabsView: React.FC<OtherTabsViewProps> = ({
                   {s.badge}
                 </span>
               </div>
-              <p className="text-xs text-[#c7c4d7] leading-relaxed">{s.desc}</p>
-              <div className="pt-2 border-t border-white/[0.08] flex items-center justify-between text-[11px] font-mono text-[#908fa0]">
+              <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">{s.desc}</p>
+              <div className="pt-2 border-t border-[var(--glass-border)] flex items-center justify-between text-[11px] font-mono text-[var(--color-text-muted)]">
                 <span>累计调用：{s.calls}</span>
                 <span className="text-[#34D399]">状态：已连通本地 Runtime</span>
               </div>
@@ -158,27 +168,70 @@ export const OtherTabsView: React.FC<OtherTabsViewProps> = ({
   }
 
   // Settings tab
+  const isLightMode = typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light';
+
   return (
-    <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-6 font-sans">
-      <div className="pb-4 border-b border-white/[0.08]">
-        <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Settings className="w-6 h-6 text-[#c7c4d7]" />
-          <span>系统偏好与企业连接 (Settings)</span>
-        </h2>
-        <p className="text-xs text-[#908fa0] mt-1">
-          管理飞书、企业微信同步配置以及 AI 交互行为策略
-        </p>
+    <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-6 font-sans animate-in fade-in duration-200">
+      <div className="pb-4 border-b border-[var(--glass-border)] flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
+              <Settings className="w-6 h-6 text-[#c7c4d7]" />
+              <span>系统偏好与设置 (Settings)</span>
+            </h2>
+            <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-sky-500/15 border border-sky-500/30 text-sky-300">
+              演示
+            </span>
+          </div>
+          <p className="text-xs text-[var(--color-text-secondary)] mt-1">
+            管理飞书、企业微信同步配置以及 AI 交互行为策略
+          </p>
+        </div>
       </div>
 
       <div className="space-y-4 text-xs">
-        <div className="specular-card rounded-2xl p-5 space-y-3">
+        {/* Development Only Theme Switcher */}
+        {Boolean((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) && (
+          <div className="acrylic-card rounded-2xl p-5 space-y-3 border border-indigo-500/30">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="text-sm font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+                  <span>主题预览开关 (仅开发模式 · 临时内存)</span>
+                </div>
+                <p className="text-[var(--color-text-muted)]">
+                  受控于 import.meta.env.DEV，仅供开发阶段调试浅色 Token；不写入 localStorage，不引入 IPC，页面刷新即恢复默认深色。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof document !== 'undefined') {
+                    if (isLightMode) {
+                      document.documentElement.removeAttribute('data-theme');
+                    } else {
+                      document.documentElement.setAttribute('data-theme', 'light');
+                    }
+                    // Force a re-render
+                    window.dispatchEvent(new Event('themechange'));
+                  }
+                }}
+                className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-indigo-500/20 text-[#c0c1ff] border border-indigo-500/30 hover:bg-indigo-500/30 transition-colors cursor-pointer"
+              >
+                当前: {isLightMode ? '浅色预览 (点击切回深色)' : '深色默认 (点击预览浅色)'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="acrylic-card rounded-2xl p-5 space-y-3">
           <div className="flex items-center justify-between">
             <div className="space-y-1">
-              <div className="text-sm font-semibold text-white flex items-center gap-2">
+              <div className="text-sm font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
                 <Cloud className="w-4 h-4 text-[#7bd0ff]" />
                 <span>飞书企业连接 (Feishu Enterprise Connect)</span>
               </div>
-              <p className="text-[#908fa0]">
+              <p className="text-[var(--color-text-muted)]">
                 同步多维表格、日历日程以及知识库文档索引
               </p>
             </div>
@@ -187,7 +240,7 @@ export const OtherTabsView: React.FC<OtherTabsViewProps> = ({
               className={`px-4 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
                 feishuSynced
                   ? 'bg-[#34D399]/20 text-[#34D399] border border-[#34D399]/30'
-                  : 'bg-white/10 text-[#908fa0] border border-white/10'
+                  : 'bg-white/10 text-[var(--color-text-muted)] border border-white/10'
               }`}
             >
               {feishuSynced ? '已连通 (点击断开)' : '已离线 (点击连接)'}
@@ -195,25 +248,25 @@ export const OtherTabsView: React.FC<OtherTabsViewProps> = ({
           </div>
         </div>
 
-        <div className="specular-card rounded-2xl p-5 space-y-3">
+        <div className="acrylic-card rounded-2xl p-5 space-y-3">
           <div className="space-y-1">
-            <div className="text-sm font-semibold text-white">AI 交互安全与隐私策略</div>
-            <p className="text-[#908fa0]">
+            <div className="text-sm font-semibold text-[var(--color-text-primary)]">AI 交互安全与隐私策略</div>
+            <p className="text-[var(--color-text-muted)]">
               严格遵循「AI 不主动打扰，重要操作需二次确认」规划准则
             </p>
           </div>
-          <div className="space-y-2 pt-2 border-t border-white/[0.08] font-mono text-[#c7c4d7]">
-            <div className="flex items-center justify-between p-2 rounded-lg bg-white/[0.03]">
+          <div className="space-y-2 pt-2 border-t border-[var(--glass-border)] font-mono text-[var(--color-text-secondary)]">
+            <div className="flex items-center justify-between p-2 rounded-lg bg-[var(--glass-bg-subtle)]">
               <span>主动监听与侵入式气泡</span>
               <span className="text-[#F87171]">已禁用 (Disabled)</span>
             </div>
-            <div className="flex items-center justify-between p-2 rounded-lg bg-white/[0.03]">
+            <div className="flex items-center justify-between p-2 rounded-lg bg-[var(--glass-bg-subtle)]">
               <span>任务写入强制确认 (Action Confirmation)</span>
               <span className="text-[#34D399]">强制开启 (Strict)</span>
             </div>
-            <div className="flex items-center justify-between p-2 rounded-lg bg-white/[0.03]">
+            <div className="flex items-center justify-between p-2 rounded-lg bg-[var(--glass-bg-subtle)]">
               <span>视觉风格</span>
-              <span className="text-[#c0c1ff]">高阶暗色玻璃拟态 (Image 2)</span>
+              <span className="text-[#c0c1ff]">高阶暗色玻璃拟态 (Image 2 · Token 体系)</span>
             </div>
           </div>
         </div>

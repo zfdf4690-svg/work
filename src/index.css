@@ -1,24 +1,76 @@
 @import "tailwindcss";
 
+:root {
+  /* =========================================================================
+     GLOBAL DESIGN TOKENS (V1.0 - DARK THEME DEFAULT)
+     ========================================================================= */
+  --color-bg-base: #17191D;
+  --color-bg-surface: rgba(28, 32, 42, 0.75);
+  --color-text-primary: #f1f3f9;
+  --color-text-secondary: #9aa1b2;
+  --color-text-muted: #62697b;
+  --color-border-subtle: rgba(255, 255, 255, 0.08);
+  --color-border-accent: rgba(99, 102, 241, 0.5);
+  --color-brand-primary: #6366f1;
+  --color-status-success: #34d399;
+  --color-status-warning: #fbbf24;
+  --color-status-danger: #f87171;
+  --color-status-info: #38bdf8;
+  --color-code-bg: rgba(0, 0, 0, 0.45);
+
+  /* Glass Surface Tokens (Dark) */
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.025);
+  --glass-bg-hover: rgba(255, 255, 255, 0.08);
+  --glass-bg-active: rgba(255, 255, 255, 0.12);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-subtle: rgba(255, 255, 255, 0.04);
+}
+
+/* Light Mode Preview (Development Only via html[data-theme="light"]) */
+html[data-theme="light"] {
+  --color-bg-base: #f4f6fa;
+  --color-bg-surface: rgba(255, 255, 255, 0.90);
+  --color-text-primary: #111827;
+  --color-text-secondary: #4b5563;
+  --color-text-muted: #9ca3af;
+  --color-border-subtle: rgba(0, 0, 0, 0.08);
+  --color-border-accent: rgba(99, 102, 241, 0.6);
+  --color-brand-primary: #4f46e5;
+  --color-status-success: #059669;
+  --color-status-warning: #d97706;
+  --color-status-danger: #dc2626;
+  --color-status-info: #0284c7;
+  --color-code-bg: rgba(0, 0, 0, 0.05);
+
+  /* Glass Surface Tokens (Light) */
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-bg-subtle: rgba(0, 0, 0, 0.025);
+  --glass-bg-hover: rgba(0, 0, 0, 0.05);
+  --glass-bg-active: rgba(0, 0, 0, 0.08);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-border-subtle: rgba(0, 0, 0, 0.04);
+}
+
 @theme {
-  --color-space-base: #07090E;
-  --color-space-surface: #0E121B;
-  --color-space-elevated: #141926;
-  --color-surface-container-lowest: #07090e;
-  --color-surface-container-low: #0f131d;
-  --color-surface-container: #151a27;
-  --color-surface-container-high: #1c2233;
-  --color-surface-container-highest: #262e44;
-  --color-on-surface: #f1f2f8;
-  --color-on-surface-variant: #c7c9dc;
-  --color-outline: #8c8ea3;
+  --color-space-base: var(--color-bg-base);
+  --color-space-surface: var(--color-bg-surface);
+  --color-space-elevated: #242936;
+  --color-surface-container-lowest: var(--color-bg-base);
+  --color-surface-container-low: #1d212b;
+  --color-surface-container: #222733;
+  --color-surface-container-high: #2a3040;
+  --color-surface-container-highest: #343c50;
+  --color-on-surface: var(--color-text-primary);
+  --color-on-surface-variant: var(--color-text-secondary);
+  --color-outline: var(--color-text-muted);
   --color-primary: #c0c1ff;
   --color-primary-container: #8083ff;
   --color-on-primary: #0b0730;
   --color-tertiary: #7bd0ff;
-  --color-status-success: #34D399;
-  --color-status-warning: #FBBF24;
-  --color-status-failed: #F87171;
+  --color-status-success: var(--color-status-success);
+  --color-status-warning: var(--color-status-warning);
+  --color-status-failed: var(--color-status-danger);
   --color-status-running: #818CF8;
   --color-status-pending: #94A3B8;
 
@@ -29,8 +81,8 @@
 @layer base {
   body {
     font-family: var(--font-sans);
-    background-color: var(--color-space-base);
-    color: var(--color-on-surface);
+    background-color: var(--color-bg-base);
+    color: var(--color-text-primary);
     overflow: hidden;
   }
 }
@@ -136,11 +188,11 @@
 
 /* 4. Deep Smoked Acrylic (熏黑亚克力 - 侧边栏与主窗口框) */
 .smoked-acrylic-dock {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(13, 17, 26, 0.75) 100%),
-              rgba(11, 15, 23, 0.70);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(23, 25, 29, 0.85) 100%),
+              rgba(23, 25, 29, 0.75);
   backdrop-filter: blur(36px) saturate(190%) contrast(108%);
   -webkit-backdrop-filter: blur(36px) saturate(190%) contrast(108%);
-  border-right: 1px solid rgba(255, 255, 255, 0.10);
+  border-right: 1px solid var(--glass-border);
   box-shadow: 
     inset -1px 0 0 0 rgba(255, 255, 255, 0.04),
     inset 0 1px 1px 0 rgba(255, 255, 255, 0.25),

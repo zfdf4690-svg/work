@@ -224,7 +224,7 @@ export const FloatingBallWidget: React.FC<FloatingBallWidgetProps> = ({
         <div
           onClick={(e) => e.stopPropagation()}
           style={{ top: `${dialogClampedTop}px` }}
-          className={`absolute w-[340px] sm:w-[380px] max-h-[500px] flex flex-col rounded-2xl bg-[#0E121B]/95 backdrop-blur-3xl border border-white/[0.16] shadow-[0_25px_60px_rgba(0,0,0,0.85)] p-4 space-y-3.5 z-50 specular-chamfer animate-in fade-in zoom-in-95 duration-200 ${
+          className={`absolute w-[340px] sm:w-[380px] max-h-[500px] flex flex-col rounded-2xl bg-[var(--color-bg-surface)] backdrop-blur-3xl border border-[var(--glass-border)] shadow-[0_25px_60px_rgba(0,0,0,0.85)] p-4 space-y-3.5 z-50 specular-chamfer animate-in fade-in zoom-in-95 duration-200 ${
             side === 'right' ? 'right-full mr-3.5' : 'left-full ml-3.5'
           }`}
         >
@@ -285,7 +285,7 @@ export const FloatingBallWidget: React.FC<FloatingBallWidgetProps> = ({
                 onClick={() => {
                   onRestoreWindow?.();
                 }}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#c0c1ff] hover:bg-white text-[#0E121B] font-semibold text-[11px] transition-all shadow-md active:scale-95 cursor-pointer"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#c0c1ff] hover:bg-white text-[#17191D] font-semibold text-[11px] transition-all shadow-md active:scale-95 cursor-pointer"
               >
                 <Maximize2 className="w-3 h-3" />
                 <span>恢复主窗口</span>
@@ -315,7 +315,7 @@ export const FloatingBallWidget: React.FC<FloatingBallWidgetProps> = ({
                 <div
                   className={`p-2 rounded-xl leading-relaxed max-w-[90%] text-[11px] ${
                     msg.sender === 'user'
-                      ? 'bg-[#c0c1ff] text-[#0B0E14] font-medium'
+                      ? 'bg-[#c0c1ff] text-[#17191D] font-medium'
                       : 'bg-white/[0.05] border border-white/[0.08] text-[#c7c4d7]'
                   }`}
                 >
@@ -471,7 +471,7 @@ export const FloatingBallWidget: React.FC<FloatingBallWidgetProps> = ({
           } bg-gradient-to-tr from-[#6366F1] via-[#8B5CF6] to-[#38BDF8] p-[1.5px] shadow-2xl shadow-[#6366F1]/40`}
         >
           {/* Inner frosted acrylic core */}
-          <div className="w-full h-full rounded-[inherit] bg-[#090C13]/85 backdrop-blur-xl flex items-center justify-center group-hover:bg-[#090C13]/50 transition-colors">
+          <div className="w-full h-full rounded-[inherit] bg-[var(--color-bg-base)]/85 backdrop-blur-xl flex items-center justify-center group-hover:bg-[var(--color-bg-base)]/50 transition-colors">
             <Sparkles className="w-5 h-5 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]" />
           </div>
 
@@ -480,10 +480,10 @@ export const FloatingBallWidget: React.FC<FloatingBallWidgetProps> = ({
             {isWindowMinimized ? (
               <span className="relative flex h-3.5 w-3.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-[#090C13]"></span>
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-[var(--color-bg-base)]"></span>
               </span>
             ) : (
-              <span className="w-3.5 h-3.5 rounded-full bg-[#818CF8] border-2 border-[#090C13]"></span>
+              <span className="w-3.5 h-3.5 rounded-full bg-[#818CF8] border-2 border-[var(--color-bg-base)]"></span>
             )}
           </div>
 
@@ -501,7 +501,7 @@ export const FloatingBallWidget: React.FC<FloatingBallWidgetProps> = ({
 
         {/* Dragging Feedback Badge */}
         {isDragging && (
-          <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-0.5 rounded-md bg-[#0E121B]/95 border border-white/25 text-[10px] text-[#c0c1ff] font-mono pointer-events-none shadow-xl">
+          <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-0.5 rounded-md bg-[var(--color-bg-surface)] border border-white/25 text-[10px] text-[#c0c1ff] font-mono pointer-events-none shadow-xl">
             释放后自动吸附至最近边缘
           </div>
         )}

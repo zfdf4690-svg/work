@@ -468,7 +468,7 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
   return (
     <div className="flex-1 flex overflow-hidden h-full min-h-0 font-sans relative">
       {/* 1. Left Conversation Rail */}
-      <div className="w-56 border-r border-white/[0.08] bg-[#11151F]/60 backdrop-blur-md p-3 flex flex-col min-h-0 h-full shrink-0 hidden md:flex">
+      <div className="w-56 border-r border-white/[0.08] bg-[var(--color-bg-surface)] backdrop-blur-md p-3 flex flex-col min-h-0 h-full shrink-0 hidden md:flex">
         {/* Top Actions: 新建对话 & 工具/Skills */}
         <div className="space-y-2.5 shrink-0">
           {/* Top action 1: 新建对话 Button */}
@@ -672,7 +672,7 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
       </div>
 
       {/* 2. Center AI Workspace */}
-      <div className="flex-1 flex flex-col bg-[#0B0E14]/70 overflow-hidden relative">
+      <div className="flex-1 flex flex-col bg-[var(--color-bg-base)]/70 overflow-hidden relative">
         {/* Active conversation header */}
         <div className="h-10 px-4 border-b border-white/[0.08] flex items-center justify-between text-xs text-[#c7c4d7] bg-white/[0.02]">
           <div className="flex items-center gap-2">
@@ -862,7 +862,7 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
         </div>
 
         {/* Bottom Input Field */}
-        <div className="p-4 border-t border-white/[0.08] bg-[#11151F]/80 backdrop-blur-xl">
+        <div className="p-4 border-t border-white/[0.08] bg-[var(--color-bg-surface)] backdrop-blur-xl">
           <form onSubmit={handleSend} className="relative flex items-center">
             <input
               type="text"
@@ -895,7 +895,7 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
       </div>
 
       {/* 3. Right Context Panel */}
-      <div className="w-72 border-l border-white/[0.08] bg-[#11151F]/70 backdrop-blur-md p-4 flex flex-col justify-between shrink-0 hidden lg:flex">
+      <div className="w-72 border-l border-white/[0.08] bg-[var(--color-bg-surface)] backdrop-blur-md p-4 flex flex-col justify-between shrink-0 hidden lg:flex">
         <div className="space-y-4">
           <div className="flex items-center justify-between border-b border-white/[0.08] pb-2">
             <span className="text-xs font-semibold text-white">当前活动上下文 (Context)</span>

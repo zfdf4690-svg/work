@@ -16,7 +16,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   unreadCount = 1,
 }) => {
   return (
-    <header className="sticky top-0 z-40 h-14 w-full flex items-center justify-between px-4 md:px-7 bg-[#0E121B]/60 backdrop-blur-2xl border-b border-white/[0.12] shadow-[0_4px_24px_rgba(0,0,0,0.4)] shrink-0 font-sans">
+    <header className="sticky top-0 z-40 h-14 w-full flex items-center justify-between px-4 md:px-7 bg-[var(--color-bg-surface)] backdrop-blur-2xl border-b border-[var(--glass-border)] shadow-[0_4px_24px_rgba(0,0,0,0.4)] shrink-0 font-sans">
       {/* Quick Status Breadcrumb */}
       <div className="flex items-center gap-2.5">
         <h1 className="text-base md:text-lg font-bold text-white tracking-tight">
@@ -63,7 +63,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         >
           <Bell className="w-4 h-4" />
           {unreadCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#F87171] ring-2 ring-[#11151F]"></span>
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#F87171] ring-2 ring-[var(--color-bg-base)]"></span>
           )}
         </button>
 

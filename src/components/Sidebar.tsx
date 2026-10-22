@@ -11,7 +11,8 @@ import {
   PanelLeftClose,
   PanelLeft,
   BookMarked,
-  Layers
+  Layers,
+  Network
 } from 'lucide-react';
 import { NavTab } from '../types';
 
@@ -34,12 +35,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   feishuSynced,
   onOpenSpec,
 }) => {
-  const navItems = [
+  // 顶部 5 项一级业务导航
+  const mainNavItems = [
     { id: 'dashboard' as NavTab, label: '工作台', icon: LayoutDashboard },
     { id: 'ai-assistant' as NavTab, label: 'AI 助手', icon: Bot, badge: '核心' },
     { id: 'knowledge' as NavTab, label: '知识库', icon: BookOpen },
-    { id: 'docs' as NavTab, label: '文稿与文件', icon: FileText },
-    { id: 'settings' as NavTab, label: '设置', icon: Settings },
+    { id: 'docs' as NavTab, label: '文件', icon: FileText, badge: '演示' },
+    { id: 'enterprise' as NavTab, label: '企业连接', icon: Network, badge: '规划中' },
   ];
 
   const recentProjects = [
@@ -91,7 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Enterprise Sync Badge */}
         {!isCollapsed && (
-          <div className="mx-0.5 px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-between">
+          <div className="mx-0.5 px-2.5 py-1.5 rounded-lg bg-[var(--glass-bg-subtle)] border border-[var(--glass-border)] flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="relative flex h-2 w-2">
                 <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${feishuSynced ? 'bg-[#34D399]' : 'bg-[#908fa0]'} opacity-75`}></span>
@@ -103,9 +105,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* Navigation Links */}
+        {/* Primary Navigation Links (5 Items) */}
         <nav className="space-y-1">
-          {navItems.map((item) => {
+          {mainNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
@@ -130,7 +132,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <span className="w-1.5 h-1.5 rounded-full bg-[#c0c1ff] shadow-sm shadow-[#c0c1ff]"></span>
                     )}
                     {item.badge && (
-                      <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-[#c0c1ff]/20 text-[#c0c1ff] border border-[#c0c1ff]/30">
+                      <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono border ${
+                        item.badge === '规划中'
+                          ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                          : item.badge === '演示'
+                            ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                            : 'bg-[#c0c1ff]/20 text-[#c0c1ff] border-[#c0c1ff]/30'
+                      }`}>
                         {item.badge}
                       </span>
                     )}
@@ -188,9 +196,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      {/* User Profile Footer Card */}
-      <div className="pt-3 border-t border-white/[0.08] mt-auto">
-        <div className={`flex items-center justify-between p-2 rounded-xl bg-[#191c22]/80 border border-white/[0.08] hover:border-white/[0.14] transition-colors ${
+      {/* Bottom Pinned Navigation: Settings (Item 6) & User Profile */}
+      <div className="pt-2 border-t border-[var(--glass-border)] mt-auto space-y-2">
+        <button
+          onClick={() => onTabChange('settings')}
+          className={`w-full flex items-center justify-between rounded-lg px-2.5 py-2 transition-colors duration-150 group ${
+            activeTab === 'settings'
+              ? 'bg-[#2a3244]/70 text-white font-medium border-l-2 border-[#c0c1ff] specular-border shadow-sm'
+              : 'text-[#c7c4d7] hover:text-white hover:bg-white/5'
+          }`}
+          title={isCollapsed ? '设置' : undefined}
+        >
+          <div className={`flex items-center gap-3 ${isCollapsed ? 'mx-auto' : ''}`}>
+            <Settings className={`w-4 h-4 ${activeTab === 'settings' ? 'text-[#c0c1ff]' : 'text-[#908fa0] group-hover:text-white'}`} />
+            {!isCollapsed && <span className="text-[13px]">设置</span>}
+          </div>
+          {!isCollapsed && (
+            <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-sky-500/15 text-sky-300 border border-sky-500/30">
+              演示
+            </span>
+          )}
+        </button>
+
+        {/* User Profile Footer Card */}
+        <div className={`flex items-center justify-between p-2 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)] hover:border-white/[0.14] transition-colors ${
           isCollapsed ? 'justify-center p-1.5' : ''
         }`}>
           <div className="flex items-center gap-2.5 min-w-0">
@@ -200,7 +229,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 alt="张三"
                 className="w-8 h-8 rounded-full object-cover ring-1 ring-white/20"
               />
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-[#34D399] ring-2 ring-[#11151F]"></span>
+              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-[#34D399] ring-2 ring-[var(--color-bg-base)]"></span>
             </div>
             {!isCollapsed && (
               <div className="truncate">
@@ -212,6 +241,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {!isCollapsed && (
             <button 
+              onClick={() => onTabChange('settings')}
               aria-label="偏好设置" 
               className="text-[#908fa0] hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
               title="偏好调整"

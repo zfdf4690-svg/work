@@ -49,6 +49,7 @@ import { NewTaskModal } from './components/NewTaskModal';
 import { AllTasksModal } from './components/AllTasksModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { KnowledgeObsidianView } from './components/KnowledgeObsidianView';
+import { EnterpriseConnectPlaceholderView } from './components/EnterpriseConnectPlaceholderView';
 import { ipcClient, domainTaskToUiTask, createTaskInputFromUi } from './api/ipcClient';
 import { TaskStatus, EventType } from './domain';
 
@@ -356,8 +357,10 @@ export default function App() {
     'dashboard': '工作台',
     'ai-assistant': 'AI 助手',
     'knowledge': '知识库',
-    'docs': '文稿与文件',
-    'skills': '工具 / Skills',
+    'docs': '文件',
+    'files': '文件',
+    'skills': '企业连接',
+    'enterprise': '企业连接',
     'settings': '设置',
   };
 
@@ -376,7 +379,7 @@ export default function App() {
   };
 
   return (
-    <div className="relative w-screen h-screen flex flex-col items-center justify-center bg-[#0B0E14] text-[#e1e2eb] overflow-hidden select-none font-sans">
+    <div className="relative w-screen h-screen flex flex-col items-center justify-center bg-[var(--color-bg-base)] text-[var(--color-text-primary)] overflow-hidden select-none font-sans">
       {/* Atmospheric Ambient Background Glow Layers (Lighting Engineering Aurora Field) */}
       <div className="ambient-lighting-engine">
         <div className="ambient-light-orb-1" />
@@ -388,7 +391,7 @@ export default function App() {
       <div className="absolute inset-0 frosted-sandblast-noise pointer-events-none z-[1] opacity-60" />
 
       {/* Main Window Frame Container (Smoked Acrylic Outer Shell) */}
-      <div className={`relative flex flex-col bg-[#07090E]/65 backdrop-blur-3xl border border-white/[0.14] shadow-[0_30px_70px_-15px_rgba(0,0,0,0.85)] overflow-hidden transition-all duration-500 ease-out z-10 ${
+      <div className={`relative flex flex-col bg-[var(--color-bg-surface)] backdrop-blur-3xl border border-[var(--glass-border)] shadow-[0_30px_70px_-15px_rgba(0,0,0,0.85)] overflow-hidden transition-all duration-500 ease-out z-10 ${
         isWindowMinimized 
           ? 'opacity-0 scale-90 translate-y-16 pointer-events-none' 
           : 'opacity-100 scale-100 translate-y-0'
@@ -465,9 +468,13 @@ export default function App() {
                 />
               )}
 
-              {(activeTab === 'docs' || activeTab === 'skills' || activeTab === 'settings') && (
+              {(activeTab === 'enterprise' || activeTab === 'skills') && (
+                <EnterpriseConnectPlaceholderView />
+              )}
+
+              {(activeTab === 'docs' || activeTab === 'files' || activeTab === 'settings') && (
                 <OtherTabsView
-                  activeTab={activeTab}
+                  activeTab={activeTab === 'files' ? 'docs' : activeTab}
                   knowledge={knowledge}
                   onOpenKnowledgeDetail={(item) => setActiveKnowledgeDetail(item)}
                   onOpenSpec={() => setIsSpecModalOpen(true)}
@@ -479,7 +486,7 @@ export default function App() {
 
             {/* Simulated Mobile Bottom Navigation Bar (Shown on Mobile view) */}
             {viewportMode === 'mobile' && (
-              <nav className="h-14 bg-[#11151F]/90 backdrop-blur-xl border-t border-white/10 flex items-center justify-around px-2 shrink-0 z-30">
+              <nav className="h-14 bg-[var(--color-bg-surface)] backdrop-blur-xl border-t border-[var(--glass-border)] flex items-center justify-around px-2 shrink-0 z-30">
                 <button
                   onClick={() => setActiveTab('dashboard')}
                   className={`flex flex-col items-center gap-1 text-[10px] ${
@@ -508,11 +515,22 @@ export default function App() {
                   <span>知识库</span>
                 </button>
                 <button
-                  onClick={() => setIsSpecModalOpen(true)}
-                  className="flex flex-col items-center gap-1 text-[10px] text-slate-400"
+                  onClick={() => setActiveTab('enterprise')}
+                  className={`flex flex-col items-center gap-1 text-[10px] ${
+                    activeTab === 'enterprise' ? 'text-indigo-400 font-semibold' : 'text-slate-400'
+                  }`}
                 >
-                  <span className="text-xs">📐</span>
-                  <span>规范说明</span>
+                  <span className="text-xs">🌐</span>
+                  <span>连接</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('settings')}
+                  className={`flex flex-col items-center gap-1 text-[10px] ${
+                    activeTab === 'settings' ? 'text-indigo-400 font-semibold' : 'text-slate-400'
+                  }`}
+                >
+                  <span className="text-xs">⚙️</span>
+                  <span>设置</span>
                 </button>
               </nav>
             )}
@@ -522,7 +540,7 @@ export default function App() {
 
       {/* Desktop Background Running Daemon State (When Main App is Minimized) */}
       {isWindowMinimized && (
-        <div className="absolute z-20 flex flex-col items-center justify-center max-w-lg px-7 py-6 rounded-3xl frosted-acrylic-panel border border-white/[0.16] shadow-[0_24px_50px_rgba(0,0,0,0.8)] text-center animate-in fade-in zoom-in-95 duration-300">
+        <div className="absolute z-20 flex flex-col items-center justify-center max-w-lg px-7 py-6 rounded-3xl frosted-acrylic-panel border border-white/[0.16] shadow-[0_24px_50px_rgba(0,0,0,0.85)] text-center animate-in fade-in zoom-in-95 duration-300">
           <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-mono mb-3">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -540,7 +558,7 @@ export default function App() {
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => setIsWindowMinimized(false)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#c0c1ff] hover:bg-white text-[#0B0E14] font-semibold text-xs transition-all shadow-lg active:scale-95 cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#c0c1ff] hover:bg-white text-[#17191D] font-semibold text-xs transition-all shadow-lg active:scale-95 cursor-pointer"
             >
               <Maximize2 className="w-3.5 h-3.5" />
               <span>恢复主工作台窗口 (Cmd+M)</span>

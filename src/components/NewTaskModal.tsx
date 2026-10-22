@@ -68,7 +68,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                className="w-full h-9 px-3 rounded-xl bg-[#11151F] border border-white/[0.08] text-white outline-none focus:border-[#c0c1ff]/50 font-mono"
+                className="w-full h-9 px-3 rounded-xl bg-[var(--glass-bg-subtle)] border border-[var(--glass-border)] text-white outline-none focus:border-[#c0c1ff]/50 font-mono"
               >
                 <option value="high">高优先级 (High)</option>
                 <option value="medium">中优先级 (Medium)</option>

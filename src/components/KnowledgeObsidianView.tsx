@@ -677,9 +677,9 @@ export const KnowledgeObsidianView: React.FC<KnowledgeObsidianViewProps> = ({
       </aside>
 
       {/* 2. Right Pane: Markdown Editor / Live Preview Area (右侧MD编辑区) */}
-      <main className="flex-1 flex flex-col h-full bg-[#0D1018] overflow-hidden">
+      <main className="flex-1 flex flex-col h-full bg-[var(--color-bg-base)] overflow-hidden">
         {/* Top Header / Breadcrumb Bar */}
-        <header className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-[#0E121B]/80 backdrop-blur-xl shrink-0">
+        <header className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-[var(--color-bg-surface)] backdrop-blur-xl shrink-0">
           {/* Left: Navigation arrows & breadcrumbs */}
           <div className="flex items-center gap-2 min-w-0">
             <div className="flex items-center gap-0.5 text-[#8c8ea3]">

@@ -81,7 +81,9 @@ export type NavTab =
   | 'ai-assistant'
   | 'knowledge'
   | 'docs'
+  | 'files'
   | 'skills'
+  | 'enterprise'
   | 'settings';
 
 export type ViewportMode = 'responsive' | 'desktop' | 'tablet' | 'mobile';
